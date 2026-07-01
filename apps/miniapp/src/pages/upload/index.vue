@@ -1,0 +1,817 @@
+<template>
+  <view class="page tab-page upload-page">
+    <view class="app-nav">
+      <view class="app-nav-left">
+        <view v-if="editingOrderId" class="app-nav-back" @tap="cancelEditing">
+          <uni-icons type="left" size="22" color="#d86693" />
+        </view>
+      </view>
+      <text class="app-nav-title">{{ pageTitle }}</text>
+      <view class="app-nav-right" />
+    </view>
+    <view class="hero-panel">
+      <view>
+        <text class="eyebrow">ORDER CAPTURE</text>
+        <text class="hero-title">{{ pageTitle }}</text>
+        <text class="hero-copy">用组件库表单录入订单，截图或文字都能补全店铺库。</text>
+      </view>
+      <view class="hero-badge">
+        <text>春日</text>
+        <text>共建</text>
+      </view>
+    </view>
+
+    <view class="panel upload-panel">
+      <view class="panel-head">
+        <view>
+          <text class="panel-title">订单截图</text>
+          <text class="panel-subtitle">可上传截图，也可以直接粘贴订单文字。</text>
+        </view>
+      </view>
+      <u-upload
+        :file-list="uploadFiles"
+        :auto-upload="false"
+        :max-count="1"
+        accept="image"
+        upload-text="上传截图"
+        width="220"
+        height="220"
+        :preview-full-image="true"
+        @afterRead="handleAfterRead"
+        @delete="removeUpload"
+      />
+      <u-textarea
+        v-model="rawText"
+        class="soft-control text-area"
+        placeholder="粘贴订单文字：第一行店铺名，后面每行一个菜品和价格"
+        border="none"
+        height="156"
+        maxlength="500"
+        count
+      />
+      <u-button
+        text="从文字提取"
+        shape="circle"
+        color="linear-gradient(135deg, #ffbad2 0%, #97ecc1 100%)"
+        custom-style="height: 44px; color: #5d3753; font-weight: 800;"
+        @click="extract"
+      />
+    </view>
+
+    <view class="panel form-panel">
+      <view class="panel-head">
+        <view>
+          <text class="panel-title">订单信息</text>
+          <text class="panel-subtitle">选择器、评分和金额均使用组件库控件。</text>
+        </view>
+      </view>
+
+      <u-form :model="form" label-position="top" label-width="100%">
+        <u-form-item label="店铺名称">
+          <u-input v-model="form.storeName" border="none" clearable placeholder="例如：春日便当研究所" />
+        </u-form-item>
+
+        <view class="form-grid">
+          <u-form-item label="外卖种类">
+            <u-cell class="picker-cell" :title="form.category" :border="false" is-link @click="picker.category = true" />
+          </u-form-item>
+          <u-form-item label="用餐时间">
+            <u-cell class="picker-cell" :title="form.mealTime" :border="false" is-link @click="picker.mealTime = true" />
+          </u-form-item>
+        </view>
+
+        <u-form-item label="订单时间">
+          <u-cell class="time-cell" :title="orderTimeText" :border="false" is-link @click="picker.orderTime = true" />
+        </u-form-item>
+
+        <view class="form-grid">
+          <u-form-item label="实付金额">
+            <u-input v-model="form.total" border="none" type="digit" prefix-icon="rmb-circle" placeholder="0.00" />
+          </u-form-item>
+          <u-form-item label="订单评分">
+            <view class="rate-field">
+              <u-rate v-model="form.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" />
+              <text class="rate-text">{{ form.rating }} 分</text>
+            </view>
+          </u-form-item>
+        </view>
+
+        <u-form-item label="不再推荐">
+          <view class="switch-field">
+            <text>{{ form.disliked ? "已标记不喜欢" : "仍可进入抽选池" }}</text>
+            <u-switch v-model="form.disliked" active-color="#ff9fbe" inactive-color="#9fecc8" />
+          </view>
+        </u-form-item>
+
+        <u-form-item label="订单评价">
+          <u-textarea v-model="form.note" border="none" height="120" placeholder="这单有什么值得记住的？" maxlength="240" count />
+        </u-form-item>
+      </u-form>
+    </view>
+
+    <view class="panel dishes-panel">
+      <view class="panel-head">
+        <view>
+          <text class="panel-title">菜品明细</text>
+          <text class="panel-subtitle">菜品会同步到订单记录里。</text>
+        </view>
+        <u-button
+          text="添加"
+          size="small"
+          shape="circle"
+          class="dish-action-btn dish-add-btn"
+          color="linear-gradient(135deg, #9fecc8 0%, #ffbad2 100%)"
+          custom-style="width: 72px; height: 32px; margin: 0; color: #315244; font-weight: 900; padding: 0;"
+          @click="addDish"
+        />
+      </view>
+
+      <view v-for="(dish, index) in form.dishes" :key="index" class="dish-card">
+        <view class="dish-title">
+          <text>菜品 {{ index + 1 }}</text>
+          <u-button
+            v-if="form.dishes.length > 1"
+            text="移除"
+            size="mini"
+            shape="circle"
+            class="dish-action-btn dish-remove-btn"
+            color="#ffe1ed"
+            custom-style="width: 58px; height: 28px; margin: 0; color: #9b4268; font-weight: 900; padding: 0; box-shadow: inset 0 0 0 1px rgba(216, 102, 147, 0.16);"
+            @click="removeDish(index)"
+          />
+        </view>
+        <view class="dish-grid">
+          <view class="dish-form-item">
+            <text class="dish-form-label">菜品名称</text>
+            <u-input v-model="dish.name" border="none" clearable placeholder="菜品名" />
+          </view>
+          <view class="dish-form-item">
+            <text class="dish-form-label">菜品价格</text>
+            <u-input v-model="dish.price" border="none" type="digit" placeholder="价格" />
+          </view>
+          <view class="dish-form-item">
+            <text class="dish-form-label">菜品评分</text>
+            <view class="rate-field dish-rate-field">
+              <u-rate v-model="dish.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" />
+              <text class="rate-text">{{ dish.rating }} 分</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <u-button
+        :text="saveButtonText"
+        shape="circle"
+        color="linear-gradient(135deg, #d86693 0%, #8ee6b8 100%)"
+        custom-style="height: 48px; margin-top: 12px; color: #ffffff; font-weight: 900; box-shadow: 0 14px 30px rgba(216, 102, 147, 0.24);"
+        @click="save"
+      />
+    </view>
+
+
+    <u-picker
+      :show="picker.category"
+      :columns="categoryColumns"
+      title="选择外卖种类"
+      confirm-color="#d86693"
+      @confirm="confirmCategory"
+      @cancel="picker.category = false"
+      @close="picker.category = false"
+    />
+    <u-picker
+      :show="picker.mealTime"
+      :columns="mealTimeColumns"
+      title="选择用餐时间"
+      confirm-color="#d86693"
+      @confirm="confirmMealTime"
+      @cancel="picker.mealTime = false"
+      @close="picker.mealTime = false"
+    />
+    <u-modal
+      :show="deleteDialog.show"
+      title="确认删除"
+      :content="deleteDialog.content"
+      show-cancel-button
+      confirm-text="删除"
+      cancel-text="取消"
+      confirm-color="#d86693"
+      @confirm="confirmDeleteAction"
+      @cancel="closeDeleteDialog"
+      @close="closeDeleteDialog"
+    />
+    <u-datetime-picker
+      v-model="orderTimeValue"
+      :show="picker.orderTime"
+      mode="datetime"
+      title="选择订单时间"
+      confirm-color="#d86693"
+      :close-on-click-overlay="true"
+      @confirm="confirmOrderTime"
+      @cancel="picker.orderTime = false"
+      @close="picker.orderTime = false"
+    />
+  </view>
+</template>
+
+<script setup lang="ts">
+import { onShow, onTabItemTap } from "@dcloudio/uni-app";
+import { computed, reactive, ref } from "vue";
+import { api } from "@/api/client";
+import type { Order } from "@/types";
+
+type DishForm = {
+  name: string;
+  price: number | string;
+  rating: number;
+  disliked: boolean;
+  note: string;
+};
+
+type UploadFile = {
+  url?: string;
+  thumb?: string;
+  path?: string;
+  tempFilePath?: string;
+  status?: string;
+  message?: string;
+  [key: string]: unknown;
+};
+
+const categories = ["快餐", "奶茶", "烧烤", "火锅", "轻食", "粉面", "咖啡", "甜品"];
+const mealTimes = ["早餐", "午餐", "下午茶", "晚餐", "夜宵"];
+const categoryColumns = [categories];
+const mealTimeColumns = [mealTimes];
+
+const image = ref("");
+const rawText = ref("");
+const uploadFiles = ref<UploadFile[]>([]);
+const orderTimeValue = ref(Date.now());
+const picker = reactive({ category: false, mealTime: false, orderTime: false });
+const editingOrderId = ref("");
+const deleteDialog = reactive({
+  show: false,
+  content: "",
+  action: null as null | (() => void | Promise<void>)
+});
+
+const form = reactive({
+  storeName: "",
+  category: "快餐",
+  mealTime: "午餐",
+  orderTime: formatDateTime(orderTimeValue.value),
+  total: 0 as number | string,
+  rating: 4,
+  disliked: false,
+  note: "",
+  dishes: [{ name: "", price: 0, rating: 4, disliked: false, note: "" }] as DishForm[]
+});
+
+const pageTitle = computed(() => editingOrderId.value ? "编辑订单" : "上传订单");
+const saveButtonText = computed(() => editingOrderId.value ? "保存订单修改" : "保存订单并同步店铺库");
+const orderTimeText = computed(() => form.orderTime.replace("T", " "));
+
+function createEmptyDish(): DishForm {
+  return { name: "", price: 0, rating: 4, disliked: false, note: "" };
+}
+
+function resetForm() {
+  image.value = "";
+  rawText.value = "";
+  uploadFiles.value = [];
+  orderTimeValue.value = Date.now();
+  Object.assign(form, {
+    storeName: "",
+    category: categories[0],
+    mealTime: mealTimes[1] || mealTimes[0],
+    orderTime: formatDateTime(orderTimeValue.value),
+    total: 0,
+    rating: 4,
+    disliked: false,
+    note: ""
+  });
+  form.dishes = [createEmptyDish()];
+}
+
+function fillFormFromOrder(order: Order) {
+  const parsedTime = new Date(order.orderTime).getTime();
+  orderTimeValue.value = Number.isFinite(parsedTime) ? parsedTime : Date.now();
+  Object.assign(form, {
+    storeName: order.store?.name || "",
+    category: order.category || order.store?.category || categories[0],
+    mealTime: order.mealTime || mealTimes[1] || mealTimes[0],
+    orderTime: formatDateTime(orderTimeValue.value),
+    total: Number(order.total || 0),
+    rating: Number(order.rating || 4),
+    disliked: Boolean(order.disliked),
+    note: order.note || ""
+  });
+  const dishes = order.dishes?.length ? order.dishes : [{ name: "", price: order.total || 0, rating: order.rating || 4, disliked: false, note: "" }];
+  form.dishes = dishes.map((dish) => ({
+    name: dish.name || "",
+    price: Number(dish.price || 0),
+    rating: Number(dish.rating || order.rating || 4),
+    disliked: Boolean(dish.disliked),
+    note: dish.note || ""
+  }));
+  image.value = "";
+  rawText.value = "";
+  uploadFiles.value = [];
+}
+
+async function loadEditingOrder(id: string) {
+  const result = await api.orders() as { orders: Order[] };
+  const order = result.orders.find((item) => item.id === id);
+  if (!order) {
+    editingOrderId.value = "";
+    uni.removeStorageSync("editingOrderId");
+    resetForm();
+    uni.showToast({ title: "订单不存在", icon: "none" });
+    return;
+  }
+  editingOrderId.value = id;
+  fillFormFromOrder(order);
+}
+
+async function syncEditingOrder() {
+  const id = String(uni.getStorageSync("editingOrderId") || "");
+  if (!id) {
+    if (editingOrderId.value) {
+      editingOrderId.value = "";
+      resetForm();
+    }
+    return;
+  }
+  if (id !== editingOrderId.value) await loadEditingOrder(id);
+}
+
+function requestDelete(content: string, action: () => void | Promise<void>) {
+  deleteDialog.content = content;
+  deleteDialog.action = action;
+  deleteDialog.show = true;
+}
+
+function closeDeleteDialog() {
+  deleteDialog.show = false;
+  deleteDialog.content = "";
+  deleteDialog.action = null;
+}
+
+async function confirmDeleteAction() {
+  const action = deleteDialog.action;
+  closeDeleteDialog();
+  if (action) await action();
+}
+
+function cancelEditing() {
+  uni.removeStorageSync("editingOrderId");
+  editingOrderId.value = "";
+  resetForm();
+  closeUploadOverlays();
+  uni.setStorageSync("openMyTab", "orders");
+  uni.switchTab({ url: "/pages/me/index" });
+}
+
+function resetUploadTab() {
+  uni.removeStorageSync("editingOrderId");
+  editingOrderId.value = "";
+  resetForm();
+  closeUploadOverlays();
+}
+function handleAfterRead(event: { file?: UploadFile | UploadFile[] }) {
+  const file = Array.isArray(event.file) ? event.file[0] : event.file;
+  const url = file?.url || file?.thumb || file?.path || file?.tempFilePath || "";
+  if (!url) return;
+  image.value = url;
+  uploadFiles.value = [{ ...file, url, status: "success", message: "已选择" }];
+}
+
+function removeUpload() {
+  requestDelete("确定删除已选择的订单截图吗？", () => {
+    image.value = "";
+    uploadFiles.value = [];
+  });
+}
+
+function closeUploadOverlays() {
+  picker.category = false;
+  picker.mealTime = false;
+  picker.orderTime = false;
+  uni.pageScrollTo({ scrollTop: 0, duration: 0 });
+}
+
+function extract() {
+  const lines = rawText.value.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+  if (!lines.length) {
+    uni.showToast({ title: "先粘贴订单文字", icon: "none" });
+    return;
+  }
+  form.storeName = lines[0] || form.storeName;
+  const dishes = lines.slice(1).map((line) => {
+    const match = line.match(/(.+?)\s*[¥￥]?\s*(\d+(?:\.\d+)?)/);
+    return { name: match?.[1]?.trim() || line, price: Number(match?.[2] || 0), rating: 4, disliked: false, note: "" };
+  });
+  form.dishes = dishes.length ? dishes : form.dishes;
+  form.total = form.dishes.reduce((sum, item) => sum + Number(item.price || 0), 0);
+}
+
+function addDish() {
+  form.dishes.push({ name: "", price: 0, rating: 4, disliked: false, note: "" });
+}
+
+function removeDish(index: number) {
+  requestDelete("确定移除这个菜品吗？", () => {
+    form.dishes.splice(index, 1);
+  });
+}
+
+function confirmCategory(event: { value?: string[]; indexs?: number[] }) {
+  form.category = getPickerValue(event, categories);
+  picker.category = false;
+}
+
+function confirmMealTime(event: { value?: string[]; indexs?: number[] }) {
+  form.mealTime = getPickerValue(event, mealTimes);
+  picker.mealTime = false;
+}
+function confirmOrderTime(event: { value?: number | string }) {
+  const value = Number(event.value || orderTimeValue.value || Date.now());
+  orderTimeValue.value = value;
+  form.orderTime = formatDateTime(value);
+  picker.orderTime = false;
+}
+
+function getPickerValue(event: { value?: unknown[]; indexs?: number[] }, fallback: string[]) {
+  const selected = event.value?.[0];
+  if (typeof selected === "string") return selected;
+  const index = event.indexs?.[0] || 0;
+  return fallback[index] || fallback[0];
+}
+function formatDateTime(value: number | string) {
+  const date = new Date(Number(value));
+  const pad = (item: number) => String(item).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function buildPayload() {
+  const dishes = form.dishes
+    .map((dish) => ({
+      name: dish.name.trim(),
+      price: Number(dish.price || 0),
+      rating: Number(dish.rating || form.rating || 4),
+      disliked: Boolean(dish.disliked),
+      note: dish.note
+    }))
+    .filter((dish) => dish.name || dish.price > 0);
+
+  return {
+    storeName: form.storeName.trim(),
+    category: form.category,
+    mealTime: form.mealTime,
+    orderTime: form.orderTime,
+    total: Number(form.total || 0),
+    rating: Number(form.rating || 4),
+    disliked: Boolean(form.disliked),
+    note: form.note.trim(),
+    dishes: dishes.length ? dishes : [{ name: "未命名菜品", price: Number(form.total || 0), rating: Number(form.rating || 4), disliked: false }]
+  };
+}
+
+async function save() {
+  const payload = buildPayload();
+  if (!payload.storeName) {
+    uni.showToast({ title: "请填写店铺名称", icon: "none" });
+    return;
+  }
+  if (editingOrderId.value) {
+    await api.updateOrder(editingOrderId.value, payload);
+    uni.removeStorageSync("editingOrderId");
+    editingOrderId.value = "";
+    uni.showToast({ title: "已更新" });
+  } else {
+    await api.createOrder(payload);
+    uni.showToast({ title: "已保存" });
+  }
+  resetForm();
+  uni.setStorageSync("openMyTab", "orders");
+  uni.switchTab({ url: "/pages/me/index" });
+}
+onShow(syncEditingOrder);
+onTabItemTap(resetUploadTab);
+</script>
+
+<style scoped>
+.upload-page {
+  display: grid;
+  gap: 22rpx;
+  padding-bottom: 42rpx;
+}
+
+.hero-panel,
+.panel {
+  border: 1rpx solid rgba(216, 102, 147, 0.16);
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 18rpx 42rpx rgba(216, 102, 147, 0.12);
+}
+
+.hero-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  position: relative;
+  padding: 30rpx;
+  background: linear-gradient(135deg, #ffd8e6 0%, #f8fffb 52%, #caf7dc 100%);
+}
+
+.hero-panel::after {
+  content: "";
+  position: absolute;
+  right: 130rpx;
+  top: 28rpx;
+  width: 54rpx;
+  height: 54rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+}
+
+.eyebrow,
+.panel-subtitle {
+  display: block;
+  color: #8d7281;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.hero-title {
+  display: block;
+  margin-top: 8rpx;
+  color: #513d4a;
+  font-size: 48rpx;
+  font-weight: 950;
+}
+
+.hero-copy {
+  display: block;
+  margin-top: 10rpx;
+  color: #7b6874;
+  font-size: 25rpx;
+  line-height: 1.5;
+}
+
+.hero-badge {
+  display: grid;
+  place-items: center;
+  flex: 0 0 120rpx;
+  width: 120rpx;
+  height: 120rpx;
+  border: 6rpx solid #ffffff;
+  border-radius: 44rpx;
+  background: #8ee6b8;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 950;
+  transform: rotate(8deg);
+}
+
+.panel {
+  padding: 26rpx;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin-bottom: 20rpx;
+}
+
+.panel-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 64rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, rgba(255, 228, 239, 0.96), rgba(226, 251, 233, 0.96));
+  padding: 0 24rpx 0 68rpx;
+  color: #513d4a;
+  font-size: 36rpx;
+  font-weight: 950;
+  box-shadow: 0 10rpx 24rpx rgba(216, 102, 147, 0.12);
+}
+
+.panel-title::before {
+  content: "";
+  position: absolute;
+  left: 22rpx;
+  top: 50%;
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #d86693;
+  box-shadow: 24rpx 0 0 #8ee6b8;
+  transform: translateY(-50%);
+}
+
+.upload-panel {
+  display: grid;
+  gap: 18rpx;
+}
+
+.form-grid,
+.dish-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+}
+
+.dish-grid {
+  gap: 18rpx;
+}
+
+.dish-form-item {
+  display: grid;
+  gap: 10rpx;
+  width: 100%;
+}
+
+.dish-form-label {
+  color: #715869;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+.dish-rate-field {
+  justify-content: space-between;
+}
+
+.dish-action-btn {
+  flex: 0 0 auto;
+}
+
+.dish-add-btn,
+.dish-remove-btn {
+  box-shadow: 0 8rpx 20rpx rgba(216, 102, 147, 0.14);
+}
+
+.rate-field,
+.switch-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  width: 100%;
+  height: 92rpx;
+  min-height: 92rpx;
+  box-sizing: border-box;
+  border-radius: 24rpx;
+  background: #fff9fc;
+  padding: 0 22rpx;
+  box-shadow: inset 0 0 0 1rpx rgba(216, 102, 147, 0.1);
+}
+
+.rate-text,
+.switch-field text {
+  color: #7e6c7a;
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.dishes-panel {
+  display: grid;
+  gap: 18rpx;
+}
+
+.dish-card {
+  border: 1rpx solid rgba(172, 225, 196, 0.72);
+  border-radius: 28rpx;
+  background: linear-gradient(135deg, #fff7fb 0%, #f2fff7 100%);
+  padding: 18rpx;
+  box-shadow: 0 12rpx 30rpx rgba(95, 159, 124, 0.08), inset 0 0 0 1rpx rgba(255, 255, 255, 0.72);
+}
+
+.dish-title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12rpx;
+  min-height: 58rpx;
+  margin-bottom: 16rpx;
+  padding: 4rpx 0;
+}
+
+.dish-title::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 10rpx;
+  height: 34rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #d86693, #8ee6b8);
+}
+
+.dish-title > text,
+.dish-title > uni-text {
+  display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  background: transparent;
+  padding: 0;
+  color: #5d3753;
+  font-size: 32rpx;
+  font-weight: 950;
+}
+
+.picker-cell,
+.time-cell {
+  width: 100%;
+  height: 92rpx;
+  min-height: 92rpx;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 24rpx;
+  background: #fff9fc;
+  box-shadow: inset 0 0 0 1rpx rgba(216, 102, 147, 0.1);
+}
+
+:deep(.picker-cell .u-cell__body),
+:deep(.time-cell .u-cell__body) {
+  width: 100%;
+  height: 92rpx;
+  min-height: 92rpx;
+  box-sizing: border-box;
+  padding: 0 22rpx;
+}
+
+:deep(.picker-cell .u-cell__title-text),
+:deep(.time-cell .u-cell__title-text) {
+  color: #513d4a;
+  font-weight: 800;
+}
+:deep(.u-form-item) {
+  width: 100%;
+}
+
+:deep(.u-form-item__body) {
+  width: 100%;
+  padding: 6rpx 0 20rpx;
+}
+
+:deep(.u-form-item__body__left) {
+  width: 100%;
+  margin-bottom: 10rpx;
+}
+
+:deep(.u-form-item__body__right),
+:deep(.u-form-item__body__right__content),
+:deep(.u-form-item__body__right__content__slot) {
+  width: 100%;
+  min-width: 0;
+}
+
+:deep(.u-form-item__body__left__content__label),
+:deep(.u-form-item__body__left__content) {
+  color: #715869;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+:deep(.u-input),
+:deep(.u-textarea) {
+  width: 100% !important;
+  box-sizing: border-box;
+  border-radius: 24rpx !important;
+  background: #fff9fc !important;
+  box-shadow: inset 0 0 0 1rpx rgba(216, 102, 147, 0.1);
+}
+
+:deep(.u-input) {
+  height: 92rpx !important;
+  min-height: 92rpx;
+}
+
+:deep(.u-input__content),
+:deep(.u-input__content__field-wrapper),
+:deep(.u-input__content__field-wrapper__field) {
+  height: 92rpx !important;
+  min-height: 92rpx;
+  line-height: 92rpx !important;
+}
+
+.panel-head :deep(.u-button),
+.dish-title :deep(.u-button) {
+  flex: 0 0 auto;
+  min-width: 0 !important;
+}
+
+:deep(.u-upload__button) {
+  border-radius: 28rpx !important;
+  background: linear-gradient(135deg, #fff2f8 0%, #edfff5 100%) !important;
+}
+
+:deep(.u-upload__wrap__preview) {
+  border-radius: 28rpx !important;
+  overflow: hidden;
+}
+</style>

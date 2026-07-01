@@ -1,0 +1,86 @@
+{
+  "globalStyle": {
+    "navigationBarBackgroundColor": "#ffd8e6",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "外卖选择器",
+    "backgroundColor": "#fff7fb"
+  },
+  "pages": [
+    {
+      "path": "pages/random/index",
+      "style": {
+        "navigationBarTitleText": "随机",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/upload/index",
+      "style": {
+        "navigationBarTitleText": "上传订单",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/stores/index",
+      "style": {
+        "navigationBarTitleText": "店铺",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/me/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/store-detail/index",
+      "style": {
+        "navigationBarTitleText": "店铺详情",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/dish-detail/index",
+      "style": {
+        "navigationBarTitleText": "菜品详情",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^uni-(.*)": "@dcloudio/uni-ui/lib/uni-$1/uni-$1.vue",
+      "^u-(.*)": "uview-plus/components/u-$1/u-$1.vue",
+      "^up-(.*)": "uview-plus/components/u-$1/u-$1.vue"
+    }
+  },
+  "tabBar": {
+    "color": "#6f8b7d",
+    "selectedColor": "#d86693",
+    "backgroundColor": "#fff9fc",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/random/index",
+        "text": "随机"
+      },
+      {
+        "pagePath": "pages/upload/index",
+        "text": "上传"
+      },
+      {
+        "pagePath": "pages/stores/index",
+        "text": "店铺"
+      },
+      {
+        "pagePath": "pages/me/index",
+        "text": "我的"
+      }
+    ],
+    "fontSize": "15px",
+    "height": "62px"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "waimai-picker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/miniapp",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "node server.mjs",
+    "preview": "node server.mjs 5174",
+    "miniapp:dev:h5": "npm --workspace apps/miniapp run dev:h5",
+    "miniapp:dev:weixin": "npm --workspace apps/miniapp run dev:mp-weixin",
+    "miniapp:dev:alipay": "npm --workspace apps/miniapp run dev:mp-alipay",
+    "api:dev": "npm --workspace apps/api run dev"
+  }
+}

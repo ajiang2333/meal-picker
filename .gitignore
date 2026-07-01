@@ -1,0 +1,16 @@
+node_modules/
+.npm/
+.npm-cache/
+dist/
+build/
+.vite/
+
+*.log
+.env
+.env.*
+!.env.example
+
+apps/miniapp/unpackage/
+apps/miniapp/dist/
+
+.codex_github_known_hosts

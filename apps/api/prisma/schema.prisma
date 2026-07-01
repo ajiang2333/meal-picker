@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  provider       String         @default("mock")
+  providerOpenId String?        @unique
+  nickname       String
+  avatarUrl      String?
+  avatarColor    String         @default("#ffd100")
+  orders         Order[]
+  reviews        Review[]
+  createdStores  Store[]        @relation("StoreCreatedBy")
+  updatedStores  Store[]        @relation("StoreUpdatedBy")
+  storeUpdates   StoreRevision[]
+  randomPicks    RandomPick[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Store {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  category    String
+  tags        Json
+  mealTimes   Json
+  description String?
+  coverUrl    String?
+  createdById String?
+  updatedById String?
+  createdBy   User?           @relation("StoreCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?           @relation("StoreUpdatedBy", fields: [updatedById], references: [id])
+  dishes      Dish[]
+  orders      Order[]
+  reviews     Review[]
+  revisions   StoreRevision[]
+  randomPicks RandomPick[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Dish {
+  id        String      @id @default(cuid())
+  storeId   String
+  store     Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  price     Float
+  disliked  Boolean     @default(false)
+  items     OrderItem[]
+  reviews   Review[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([storeId, name])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  userId      String
+  storeId     String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store       Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderTime   DateTime
+  mealTime    String
+  category    String
+  total       Float
+  deliveryFee Float       @default(0)
+  rating      Int
+  disliked    Boolean     @default(false)
+  note        String?
+  imageUrl    String?
+  rawText     String?
+  items       OrderItem[]
+  reviews     Review[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  dishId        String?
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  dish          Dish?    @relation(fields: [dishId], references: [id], onDelete: SetNull)
+  nameSnapshot  String
+  priceSnapshot Float
+  rating        Int?
+  disliked      Boolean  @default(false)
+  note          String?
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  userId     String
+  storeId    String?
+  dishId     String?
+  orderId    String?
+  targetType String
+  rating     Int
+  disliked   Boolean  @default(false)
+  content    String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store      Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  dish       Dish?    @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model StoreRevision {
+  id        String   @id @default(cuid())
+  storeId   String
+  userId    String
+  note      String
+  snapshot  Json
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model RandomPick {
+  id        String   @id @default(cuid())
+  storeId   String
+  userId    String
+  category  String
+  mealTime  String
+  storeName String
+  rating    Float
+  storeType String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}

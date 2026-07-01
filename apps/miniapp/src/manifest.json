@@ -1,0 +1,21 @@
+{
+  "name": "肥宅随机投喂器",
+  "appid": "__UNI__WAIMAI_PICKER",
+  "description": "多人共建外卖店铺库、订单评价和随机抽选小程序",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": true
+    }
+  },
+  "mp-alipay": {
+    "appid": "wx37bee489fd3660b4"
+  },
+  "h5": {
+    "router": {
+      "mode": "hash"
+    }
+  }
+}
