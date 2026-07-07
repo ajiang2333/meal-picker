@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "workspaces": [
     "apps/miniapp",
     "apps/api"
@@ -13,6 +16,11 @@
     "miniapp:dev:h5": "npm --workspace apps/miniapp run dev:h5",
     "miniapp:dev:weixin": "npm --workspace apps/miniapp run dev:mp-weixin",
     "miniapp:dev:alipay": "npm --workspace apps/miniapp run dev:mp-alipay",
-    "api:dev": "npm --workspace apps/api run dev"
+    "api:dev": "npm --workspace apps/api run dev",
+    "api:build": "npm --workspace apps/api run build",
+    "api:start": "npm --workspace apps/api run start",
+    "api:db:deploy": "npm --workspace apps/api run db:deploy",
+    "api:seed": "npm --workspace apps/api run seed",
+    "api:prisma:generate": "npm --workspace apps/api run prisma:generate"
   }
 }

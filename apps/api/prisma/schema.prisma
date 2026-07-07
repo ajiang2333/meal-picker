@@ -28,8 +28,8 @@ model Store {
   id          String          @id @default(cuid())
   name        String          @unique
   category    String
-  tags        Json
-  mealTimes   Json
+  tags        String   @default("[]")
+  mealTimes   String   @default("[]")
   description String?
   coverUrl    String?
   createdById String?
@@ -118,7 +118,7 @@ model StoreRevision {
   storeId   String
   userId    String
   note      String
-  snapshot  Json
+  snapshot  String
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())

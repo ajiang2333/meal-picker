@@ -14,3 +14,4 @@ apps/miniapp/unpackage/
 apps/miniapp/dist/
 
 .codex_github_known_hosts
+*.db

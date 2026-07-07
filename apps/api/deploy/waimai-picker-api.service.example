@@ -1,0 +1,15 @@
+[Unit]
+Description=Waimai Picker API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/waimai-picker/apps/api
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/src/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,7 @@
 import type { OrderItemInput } from "@/types";
 
-const API_BASE = "http://127.0.0.1:8787/api";
+// const API_BASE = "http://127.0.0.1:8787/api";
+const API_BASE = "http://122.51.38.219:8787/api";
 
 const mockUsers = [
   { id: "mock-user-1", nickname: "春野小满", avatarColor: "#ffb8d0" },

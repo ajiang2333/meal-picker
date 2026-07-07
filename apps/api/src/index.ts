@@ -2,6 +2,9 @@ import cors from "cors";
 import express from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
+import { loadLocalEnv } from "./env.js";
+
+loadLocalEnv();
 
 const prisma = new PrismaClient();
 const app = express();
@@ -21,7 +24,20 @@ const covers: Record<string, string> = {
 };
 
 function asArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(String) : [];
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return value ? [value] : [];
+    }
+  }
+  return [];
+}
+
+function toJsonText(value: unknown): string {
+  return JSON.stringify(value ?? []);
 }
 
 function mealTimeFromDate(date: Date) {
@@ -55,7 +71,29 @@ function average(values: number[]) {
   return valid.length ? valid.reduce((sum, item) => sum + item, 0) / valid.length : 0;
 }
 
-function toUserDto(user: any) {
+type UserDto = {
+  id: string;
+  nickname: string;
+  avatarUrl?: string | null;
+  avatarColor: string;
+};
+
+type StoreDto = {
+  id: string;
+  name: string;
+  category: string;
+  tags: string[];
+  mealTimes: string[];
+  description?: string | null;
+  coverUrl?: string | null;
+  rating: number;
+  avgPrice: number;
+  orderCount: number;
+  createdBy?: UserDto;
+  updatedBy?: UserDto;
+};
+
+function toUserDto(user: any): UserDto | undefined {
   if (!user) return undefined;
   return {
     id: user.id,
@@ -65,7 +103,7 @@ function toUserDto(user: any) {
   };
 }
 
-function toStoreDto(store: any) {
+function toStoreDto(store: any): StoreDto {
   const orderRatings = (store.orders || []).map((order: any) => order.rating);
   const reviewRatings = (store.reviews || []).map((review: any) => review.rating);
   const dishRatings = (store.dishes || []).flatMap((dish: any) => (dish.reviews || []).map((review: any) => review.rating));
@@ -154,16 +192,16 @@ async function upsertStore(data: any, userId: string) {
     where: { name: data.storeName },
     update: {
       category: data.category,
-      tags,
-      mealTimes,
+      tags: toJsonText(tags),
+      mealTimes: toJsonText(mealTimes),
       description: data.description,
       updatedById: userId
     },
     create: {
       name: data.storeName,
       category: data.category,
-      tags,
-      mealTimes,
+      tags: toJsonText(tags),
+      mealTimes: toJsonText(mealTimes),
       description: data.description || "由用户上传订单自动加入共建店铺库。",
       coverUrl: covers[data.category] || covers["快餐"],
       createdById: userId,
@@ -175,12 +213,12 @@ async function upsertStore(data: any, userId: string) {
       storeId: store.id,
       userId,
       note: data.revisionNote || "上传订单时同步维护店铺库。",
-      snapshot: {
+      snapshot: toJsonText({
         name: store.name,
         category: store.category,
         tags,
         mealTimes
-      }
+      })
     }
   });
   return store;
@@ -212,6 +250,7 @@ app.get("/api/users", async (_req, res) => {
 app.get("/api/stores", async (req, res) => {
   const keyword = String(req.query.keyword || "").trim();
   const category = String(req.query.category || "全部");
+  const mealTime = String(req.query.mealTime || "全部");
   const stores = await prisma.store.findMany({
     where: {
       AND: [
@@ -236,7 +275,10 @@ app.get("/api/stores", async (req, res) => {
     },
     orderBy: { updatedAt: "desc" }
   });
-  res.json({ stores: stores.map(toStoreDto) });
+  const storeDtos = stores
+    .map(toStoreDto)
+    .filter((store) => mealTime === "全部" || store.mealTimes.includes(mealTime));
+  res.json({ stores: storeDtos });
 });
 
 app.get("/api/stores/:id", async (req, res) => {
@@ -272,15 +314,15 @@ app.put("/api/stores/:id", async (req, res) => {
     data: {
       name: req.body.name,
       category: req.body.category,
-      tags: req.body.tags || [],
-      mealTimes: req.body.mealTimes || [],
+      tags: toJsonText(req.body.tags || []),
+      mealTimes: toJsonText(req.body.mealTimes || []),
       description: req.body.description,
       updatedById: user.id,
       revisions: {
         create: {
           userId: user.id,
           note: req.body.note || "更新了店铺信息。",
-          snapshot: req.body
+          snapshot: toJsonText(req.body)
         }
       }
     },
@@ -401,18 +443,93 @@ app.put("/api/orders/:id", async (req, res) => {
   const user = await currentUser(req);
   const order = await prisma.order.findFirst({ where: { id: req.params.id, userId: user.id } });
   if (!order) return res.status(404).json({ error: "order_not_found" });
-  const updated = await prisma.order.update({
+
+  const store = req.body.storeName ? await upsertStore(req.body, user.id) : undefined;
+  const orderTime = req.body.orderTime ? new Date(req.body.orderTime) : undefined;
+  const rating = req.body.rating === undefined ? undefined : Number(req.body.rating);
+
+  await prisma.order.update({
     where: { id: order.id },
     data: {
-      orderTime: req.body.orderTime ? new Date(req.body.orderTime) : undefined,
+      storeId: store?.id,
+      orderTime,
       mealTime: req.body.mealTime,
-      total: req.body.total,
-      rating: req.body.rating,
-      disliked: req.body.disliked,
+      category: req.body.category,
+      total: req.body.total === undefined ? undefined : Number(req.body.total),
+      deliveryFee: req.body.deliveryFee === undefined ? undefined : Number(req.body.deliveryFee || 0),
+      rating,
+      disliked: req.body.disliked === undefined ? undefined : Boolean(req.body.disliked),
       note: req.body.note
     }
   });
-  res.json({ order: updated });
+
+  if (Array.isArray(req.body.dishes)) {
+    const storeId = store?.id || order.storeId;
+    await prisma.review.deleteMany({ where: { orderId: order.id } });
+    await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+
+    for (const item of req.body.dishes) {
+      const dish = await prisma.dish.upsert({
+        where: { storeId_name: { storeId, name: item.name } },
+        update: { price: Number(item.price || 0), disliked: Boolean(item.disliked) },
+        create: {
+          storeId,
+          name: item.name,
+          price: Number(item.price || 0),
+          disliked: Boolean(item.disliked)
+        }
+      });
+      await prisma.orderItem.create({
+        data: {
+          orderId: order.id,
+          dishId: dish.id,
+          nameSnapshot: item.name,
+          priceSnapshot: Number(item.price || 0),
+          rating: item.rating,
+          disliked: Boolean(item.disliked),
+          note: item.note
+        }
+      });
+      if (item.note || item.disliked) {
+        await prisma.review.create({
+          data: {
+            userId: user.id,
+            storeId,
+            dishId: dish.id,
+            orderId: order.id,
+            targetType: "dish",
+            rating: Number(item.rating || rating || 4),
+            disliked: Boolean(item.disliked),
+            content: item.note || "标注了不喜欢"
+          }
+        });
+      }
+    }
+
+    if (req.body.note || req.body.disliked) {
+      await prisma.review.create({
+        data: {
+          userId: user.id,
+          storeId,
+          orderId: order.id,
+          targetType: "order",
+          rating: Number(rating || order.rating || 4),
+          disliked: Boolean(req.body.disliked),
+          content: req.body.note || "标注了不喜欢"
+        }
+      });
+    }
+  }
+
+  const updated = await prisma.order.findUnique({
+    where: { id: order.id },
+    include: {
+      user: true,
+      store: { include: { createdBy: true, updatedBy: true, orders: true, reviews: true, dishes: { include: { reviews: true } } } },
+      items: true
+    }
+  });
+  res.json({ order: toOrderDto(updated) });
 });
 
 app.delete("/api/orders/:id", async (req, res) => {

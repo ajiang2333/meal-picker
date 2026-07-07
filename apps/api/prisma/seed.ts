@@ -1,6 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import { loadLocalEnv } from "../src/env.js";
+
+loadLocalEnv();
 
 const prisma = new PrismaClient();
+
+const json = (value: unknown) => JSON.stringify(value);
 
 async function main() {
   await prisma.review.deleteMany();
@@ -22,8 +27,8 @@ async function main() {
     data: {
       name: "金牌鸡腿饭",
       category: "快餐",
-      tags: ["快餐", "午餐", "高性价比"],
-      mealTimes: ["午餐", "晚餐"],
+      tags: json(["快餐", "午餐", "高性价比"]),
+      mealTimes: json(["午餐", "晚餐"]),
       description: "工作日午餐常备选项，出餐快，价格稳定。",
       coverUrl: "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=500&q=80",
       createdById: chen.id,
@@ -35,8 +40,8 @@ async function main() {
     data: {
       name: "甜橙茶事",
       category: "奶茶",
-      tags: ["奶茶", "下午茶", "少糖可选"],
-      mealTimes: ["下午茶", "晚餐"],
+      tags: json(["奶茶", "下午茶", "少糖可选"]),
+      mealTimes: json(["下午茶", "晚餐"]),
       description: "清爽果茶和厚乳奶茶，适合下午犯困时来一杯。",
       coverUrl: "https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format&fit=crop&w=500&q=80",
       createdById: li.id,
@@ -48,8 +53,8 @@ async function main() {
     data: {
       name: "老街把把烧",
       category: "烧烤",
-      tags: ["烧烤", "夜宵", "重口"],
-      mealTimes: ["晚餐", "夜宵"],
+      tags: json(["烧烤", "夜宵", "重口"]),
+      mealTimes: json(["晚餐", "夜宵"]),
       description: "串类选择多，辣度稳定，夜宵局比较靠谱。",
       coverUrl: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?auto=format&fit=crop&w=500&q=80",
       createdById: wang.id,
@@ -88,9 +93,9 @@ async function main() {
 
   await prisma.storeRevision.createMany({
     data: [
-      { storeId: fast.id, userId: chen.id, note: "新增工作日午餐标签。", snapshot: { tags: ["快餐", "午餐", "高性价比"] } },
-      { storeId: tea.id, userId: li.id, note: "补充少糖可选。", snapshot: { tags: ["奶茶", "下午茶", "少糖可选"] } },
-      { storeId: bbq.id, userId: wang.id, note: "补充夜宵可选。", snapshot: { tags: ["烧烤", "夜宵", "重口"] } }
+      { storeId: fast.id, userId: chen.id, note: "新增工作日午餐标签。", snapshot: json({ tags: ["快餐", "午餐", "高性价比"] }) },
+      { storeId: tea.id, userId: li.id, note: "补充少糖可选。", snapshot: json({ tags: ["奶茶", "下午茶", "少糖可选"] }) },
+      { storeId: bbq.id, userId: wang.id, note: "补充夜宵可选。", snapshot: json({ tags: ["烧烤", "夜宵", "重口"] }) }
     ]
   });
 
