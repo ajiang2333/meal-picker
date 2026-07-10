@@ -51,6 +51,7 @@ model Dish {
   store     Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
   price     Float
+  coverUrl  String?
   disliked  Boolean     @default(false)
   items     OrderItem[]
   reviews   Review[]

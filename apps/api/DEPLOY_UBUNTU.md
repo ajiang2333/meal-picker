@@ -179,3 +179,24 @@ apps/api/deploy/nginx.conf.example
 ```
 
 把里面的 `example.com` 改成你的域名后，可以放到 `/etc/nginx/sites-available/waimai-picker`。小程序正式发布建议用 HTTPS，后续可以用 certbot 给域名签证书。
+## 11. 上传图片和 PUBLIC_BASE_URL
+
+店铺封面、菜品封面会通过接口上传到：
+
+```text
+POST /api/uploads/images
+```
+
+服务端文件保存目录是：
+
+```text
+/opt/waimai-picker/apps/api/uploads
+```
+
+这个目录已经在 `.gitignore` 中忽略，不会提交到仓库。上线后建议在 `apps/api/.env` 中设置公网访问地址：
+
+```env
+PUBLIC_BASE_URL="https://你的域名"
+```
+
+如果暂时用 IP 和端口直连，可以先留空，后端会按请求的 Host 返回图片 URL。使用 Nginx/HTTPS 反代时，建议显式设置 `PUBLIC_BASE_URL`，这样小程序拿到的图片地址会稳定指向公网域名。

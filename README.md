@@ -56,23 +56,62 @@ npm run seed
 npm run dev
 ```
 
-默认 API 地址：
-
-```text
-http://127.0.0.1:8787/api
-```
+小程序前端默认请求 `http://127.0.0.1:8787/api`。如需连接公网测试环境，请在 `apps/miniapp/.env.local` 配置 `VITE_API_BASE`。
 
 ## 启动跨端小程序
 
+前端不在源码里提交公网 API 地址和真实小程序 AppID。第一次启动前，复制本地配置示例：
+
 ```powershell
 cd apps/miniapp
-npm install
-npm run dev:h5
-npm run dev:mp-weixin
-npm run dev:mp-alipay
+copy .env.example .env.local
 ```
 
-微信/支付宝发布前，需要在 `apps/miniapp/src/manifest.json` 填入对应平台 `appid`，并把 `apps/miniapp/src/api/client.ts` 里的 API 地址换成线上后端域名。
+然后在 `apps/miniapp/.env.local` 填写自己的配置：
+
+```text
+VITE_API_BASE=http://你的公网IP:8787/api
+VITE_MP_WEIXIN_APPID=wx开头的微信小程序AppID
+VITE_MP_ALIPAY_APPID=
+```
+
+`apps/miniapp/.env.local` 已被 git 忽略，不要提交真实公网地址和 AppID。未配置时默认请求本地后端 `http://127.0.0.1:8787/api`。
+
+启动开发预览：
+
+```powershell
+npm.cmd run dev:h5
+npm.cmd run dev:mp-weixin
+npm.cmd run dev:mp-alipay
+```
+
+构建脚本会在运行时临时把 `.env.local` 里的 AppID 写入 `src/manifest.json`，构建完成后自动还原源码占位配置。
+
+## 编译前端
+
+进入前端目录：
+
+```powershell
+cd apps/miniapp
+```
+
+编译 H5：
+
+```powershell
+npm.cmd run build:h5
+```
+
+H5 构建产物目录：`apps/miniapp/dist/build/h5`
+
+编译微信小程序：
+
+```powershell
+npm.cmd run build:mp-weixin
+```
+
+微信小程序构建产物目录：`apps/miniapp/dist/build/mp-weixin`
+
+微信开发者工具测试时导入 `apps/miniapp/dist/build/mp-weixin`。如果接口使用公网 IP 和 HTTP，开发阶段可在开发者工具中关闭“校验合法域名”；正式发布需要使用已备案 HTTPS 域名，并在小程序后台配置 request 合法域名。
 
 ## 已实现的产品能力
 

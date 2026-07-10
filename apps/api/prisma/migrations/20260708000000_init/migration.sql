@@ -33,6 +33,7 @@ CREATE TABLE "Dish" (
     "storeId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "price" REAL NOT NULL,
+    "coverUrl" TEXT,
     "disliked" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,

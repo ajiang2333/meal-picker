@@ -62,9 +62,9 @@ async function main() {
     }
   });
 
-  const chicken = await prisma.dish.create({ data: { storeId: fast.id, name: "招牌鸡腿饭", price: 25 } });
-  const orange = await prisma.dish.create({ data: { storeId: tea.id, name: "满杯甜橙", price: 16 } });
-  const beef = await prisma.dish.create({ data: { storeId: bbq.id, name: "牛肉小串", price: 24 } });
+  const chicken = await prisma.dish.create({ data: { storeId: fast.id, name: "招牌鸡腿饭", price: 25, coverUrl: fast.coverUrl } });
+  const orange = await prisma.dish.create({ data: { storeId: tea.id, name: "满杯甜橙", price: 16, coverUrl: tea.coverUrl } });
+  const beef = await prisma.dish.create({ data: { storeId: bbq.id, name: "牛肉小串", price: 24, coverUrl: bbq.coverUrl } });
 
   const order = await prisma.order.create({
     data: {

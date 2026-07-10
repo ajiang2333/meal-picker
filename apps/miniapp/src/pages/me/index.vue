@@ -71,6 +71,10 @@
         <view class="skeleton-line" />
       </view>
     </view>
+    <view v-else-if="tab === 'orders' && !visibleOrders.length" class="empty-panel">
+      <u-empty mode="data" text="还没有订单记录" />
+      <text class="empty-hint">上传订单后，这里会记录你的外卖足迹。</text>
+    </view>
     <u-list v-else-if="tab === 'orders'" class="detail-scroll spring-list page-flow-list" :scrollable="false" custom-style="height: auto;">
       <u-list-item v-for="order in visibleOrders" :key="order.id">
         <view class="card list-card">
@@ -93,6 +97,10 @@
         <view class="skeleton-line strong" />
         <view class="skeleton-line" />
       </view>
+    </view>
+    <view v-else-if="tab === 'reviews' && !visibleReviews.length" class="empty-panel">
+      <u-empty mode="data" text="还没有评价记录" />
+      <text class="empty-hint">给店铺或菜品写下第一条评价吧。</text>
     </view>
     <u-list v-else-if="tab === 'reviews'" class="detail-scroll spring-list page-flow-list" :scrollable="false" custom-style="height: auto;">
       <u-list-item v-for="review in visibleReviews" :key="review.id">
@@ -124,6 +132,10 @@
         <view class="skeleton-main"><view class="skeleton-line strong" /><view class="skeleton-line" /></view>
       </view>
     </view>
+    <view v-else-if="tab === 'randoms' && !randomRecords.length" class="empty-panel">
+      <u-empty mode="data" text="还没有抽选记录" />
+      <text class="empty-hint">去随机页扭一次，幸运结果会出现在这里。</text>
+    </view>
     <u-list v-else-if="tab === 'randoms'" class="detail-scroll spring-list random-record-list page-flow-list" :scrollable="false" custom-style="height: auto;">
       <u-list-item v-for="item in randomRecords" :key="item.id">
         <view class="record-row" @tap="openStore(item.store.id)">
@@ -139,6 +151,16 @@
         </view>
       </u-list-item>
     </u-list>
+    <view v-else-if="tab === 'stores' && loading && !visibleStores.length" class="list-loading-panel">
+      <view v-for="item in 3" :key="item" class="list-skeleton-card">
+        <view class="skeleton-line strong" />
+        <view class="skeleton-line" />
+      </view>
+    </view>
+    <view v-else-if="tab === 'stores' && !visibleStores.length" class="empty-panel">
+      <u-empty mode="data" text="还没有维护的店铺" />
+      <text class="empty-hint">创建或编辑店铺后，会在这里集中管理。</text>
+    </view>
     <u-list v-else-if="tab === 'stores'" class="detail-scroll spring-list page-flow-list" :scrollable="false" custom-style="height: auto;">
       <u-list-item v-for="store in visibleStores" :key="store.id">
         <view class="card list-card clickable-card" @tap="openStore(store.id)">
@@ -482,6 +504,42 @@ onShow(async () => {
 
 .detail-scroll {
   height: auto;
+}
+
+.empty-panel {
+  display: grid;
+  place-items: center;
+  gap: 14rpx;
+  min-height: 420rpx;
+  margin-top: 20rpx;
+  border: 1rpx solid rgba(172, 225, 196, 0.85);
+  border-radius: 30rpx;
+  background:
+    radial-gradient(circle at 22% 16%, rgba(255, 228, 239, 0.72), transparent 160rpx),
+    radial-gradient(circle at 82% 78%, rgba(226, 251, 233, 0.74), transparent 180rpx),
+    rgba(255, 255, 255, 0.84);
+  padding: 56rpx 28rpx;
+  text-align: center;
+  box-shadow: 0 16rpx 40rpx rgba(95, 159, 124, 0.09);
+}
+
+.empty-panel :deep(.u-empty) {
+  padding: 0 !important;
+}
+
+.empty-panel :deep(.u-empty__text) {
+  color: #4f7b67 !important;
+  font-size: 28rpx !important;
+  font-weight: 900 !important;
+}
+
+.empty-hint {
+  display: block;
+  max-width: 520rpx;
+  color: #7e978b;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1.55;
 }
 
 .list-card {

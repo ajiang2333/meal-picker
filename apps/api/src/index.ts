@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { extname, resolve } from "node:path";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
@@ -8,10 +11,19 @@ loadLocalEnv();
 
 const prisma = new PrismaClient();
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024 } });
 const port = Number(process.env.PORT || 8787);
+const uploadsDir = resolve(process.cwd(), "uploads");
+const imageMimeExtensions: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif"
+};
 
+app.set("trust proxy", true);
 app.use(cors());
+app.use("/uploads", express.static(uploadsDir));
 app.use(express.json({ limit: "10mb" }));
 
 const covers: Record<string, string> = {
@@ -47,6 +59,11 @@ function mealTimeFromDate(date: Date) {
   if (hour < 17) return "下午茶";
   if (hour < 21) return "晚餐";
   return "夜宵";
+}
+
+function publicUploadUrl(req: express.Request, fileName: string) {
+  const baseUrl = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+  return `${baseUrl}/uploads/${fileName}`;
 }
 
 async function currentUser(req: express.Request) {
@@ -93,6 +110,16 @@ type StoreDto = {
   updatedBy?: UserDto;
 };
 
+type DishDto = {
+  id: string;
+  storeId: string;
+  name: string;
+  price: number;
+  rating: number;
+  disliked: boolean;
+  coverUrl?: string | null;
+};
+
 function toUserDto(user: any): UserDto | undefined {
   if (!user) return undefined;
   return {
@@ -122,6 +149,18 @@ function toStoreDto(store: any): StoreDto {
     orderCount,
     createdBy: toUserDto(store.createdBy),
     updatedBy: toUserDto(store.updatedBy)
+  };
+}
+
+function toDishDto(dish: any, storeCoverUrl?: string | null): DishDto {
+  return {
+    id: dish.id,
+    storeId: dish.storeId,
+    name: dish.name,
+    price: dish.price,
+    rating: average((dish.reviews || []).map((review: any) => review.rating)) || 4.2,
+    disliked: dish.disliked,
+    coverUrl: dish.coverUrl || storeCoverUrl || dish.store?.coverUrl
   };
 }
 
@@ -195,6 +234,7 @@ async function upsertStore(data: any, userId: string) {
       tags: toJsonText(tags),
       mealTimes: toJsonText(mealTimes),
       description: data.description,
+      coverUrl: data.coverUrl,
       updatedById: userId
     },
     create: {
@@ -203,7 +243,7 @@ async function upsertStore(data: any, userId: string) {
       tags: toJsonText(tags),
       mealTimes: toJsonText(mealTimes),
       description: data.description || "由用户上传订单自动加入共建店铺库。",
-      coverUrl: covers[data.category] || covers["快餐"],
+      coverUrl: data.coverUrl || covers[data.category] || covers["快餐"],
       createdById: userId,
       updatedById: userId
     }
@@ -295,61 +335,67 @@ app.get("/api/stores/:id", async (req, res) => {
   if (!store) return res.status(404).json({ error: "store_not_found" });
   res.json({
     store: toStoreDto(store),
-    dishes: store.dishes.map((dish: any) => ({
-      id: dish.id,
-      storeId: dish.storeId,
-      name: dish.name,
-      price: dish.price,
-      rating: average((dish.reviews || []).map((review: any) => review.rating)) || 4.2,
-      disliked: dish.disliked
-    })),
+    dishes: store.dishes.map((dish: any) => toDishDto(dish, store.coverUrl)),
     reviews: store.reviews.map(toReviewDto)
   });
 });
 
 app.put("/api/stores/:id", async (req, res) => {
   const user = await currentUser(req);
+  const hasField = (field: string) => Object.prototype.hasOwnProperty.call(req.body, field);
+  const updateData: any = { updatedById: user.id };
+
+  if (hasField("name")) updateData.name = req.body.name;
+  if (hasField("category")) updateData.category = req.body.category;
+  if (hasField("tags")) updateData.tags = toJsonText(req.body.tags || []);
+  if (hasField("mealTimes")) updateData.mealTimes = toJsonText(req.body.mealTimes || []);
+  if (hasField("description")) updateData.description = req.body.description;
+  if (hasField("coverUrl")) updateData.coverUrl = req.body.coverUrl;
+
+  updateData.revisions = {
+    create: {
+      userId: user.id,
+      note: req.body.note || "更新了店铺信息。",
+      snapshot: toJsonText(req.body)
+    }
+  };
+
   const store = await prisma.store.update({
     where: { id: req.params.id },
-    data: {
-      name: req.body.name,
-      category: req.body.category,
-      tags: toJsonText(req.body.tags || []),
-      mealTimes: toJsonText(req.body.mealTimes || []),
-      description: req.body.description,
-      updatedById: user.id,
-      revisions: {
-        create: {
-          userId: user.id,
-          note: req.body.note || "更新了店铺信息。",
-          snapshot: toJsonText(req.body)
-        }
-      }
-    },
+    data: updateData,
     include: { createdBy: true, updatedBy: true, orders: true, reviews: true, dishes: { include: { reviews: true } } }
   });
   res.json({ store: toStoreDto(store) });
 });
-
 app.get("/api/dishes/:id", async (req, res) => {
   const dish = await prisma.dish.findUnique({
     where: { id: req.params.id },
-    include: { reviews: { include: { user: true, dish: true, store: true } } }
+    include: { store: true, reviews: { include: { user: true, dish: true, store: true } } }
   });
   if (!dish) return res.status(404).json({ error: "dish_not_found" });
   res.json({
-    dish: {
-      id: dish.id,
-      storeId: dish.storeId,
-      name: dish.name,
-      price: dish.price,
-      rating: average(dish.reviews.map((review: any) => review.rating)) || 4.2,
-      disliked: dish.disliked
-    },
+    dish: toDishDto(dish),
     reviews: dish.reviews.map(toReviewDto)
   });
 });
 
+app.put("/api/dishes/:id", async (req, res) => {
+  await currentUser(req);
+  const hasField = (field: string) => Object.prototype.hasOwnProperty.call(req.body, field);
+  const updateData: any = {};
+
+  if (hasField("name")) updateData.name = req.body.name;
+  if (hasField("price")) updateData.price = Number(req.body.price || 0);
+  if (hasField("disliked")) updateData.disliked = Boolean(req.body.disliked);
+  if (hasField("coverUrl")) updateData.coverUrl = req.body.coverUrl;
+
+  const dish = await prisma.dish.update({
+    where: { id: req.params.id },
+    data: updateData,
+    include: { store: true, reviews: { include: { user: true, dish: true, store: true } } }
+  });
+  res.json({ dish: toDishDto(dish), reviews: dish.reviews.map(toReviewDto) });
+});
 app.get("/api/orders", async (req, res) => {
   const user = await currentUser(req);
   const orders = await prisma.order.findMany({
@@ -387,11 +433,12 @@ app.post("/api/orders", async (req, res) => {
   for (const item of req.body.dishes || []) {
     const dish = await prisma.dish.upsert({
       where: { storeId_name: { storeId: store.id, name: item.name } },
-      update: { price: Number(item.price || 0), disliked: Boolean(item.disliked) },
+      update: { price: Number(item.price || 0), coverUrl: item.coverUrl, disliked: Boolean(item.disliked) },
       create: {
         storeId: store.id,
         name: item.name,
         price: Number(item.price || 0),
+        coverUrl: item.coverUrl,
         disliked: Boolean(item.disliked)
       }
     });
@@ -471,11 +518,12 @@ app.put("/api/orders/:id", async (req, res) => {
     for (const item of req.body.dishes) {
       const dish = await prisma.dish.upsert({
         where: { storeId_name: { storeId, name: item.name } },
-        update: { price: Number(item.price || 0), disliked: Boolean(item.disliked) },
+        update: { price: Number(item.price || 0), coverUrl: item.coverUrl, disliked: Boolean(item.disliked) },
         create: {
           storeId,
           name: item.name,
           price: Number(item.price || 0),
+          coverUrl: item.coverUrl,
           disliked: Boolean(item.disliked)
         }
       });
@@ -654,6 +702,19 @@ app.get("/api/stats", async (_req, res) => {
     ratings: mapToSeries(byRating).sort((a, b) => b.name.localeCompare(a.name)),
     users: mapToSeries(byUser).sort((a, b) => b.value - a.value)
   });
+});
+
+app.post("/api/uploads/images", upload.single("image"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "image_required" });
+  const extension = imageMimeExtensions[req.file.mimetype] || extname(req.file.originalname).toLowerCase();
+  if (!extension || !Object.values(imageMimeExtensions).includes(extension)) {
+    return res.status(400).json({ error: "unsupported_image_type" });
+  }
+
+  await mkdir(uploadsDir, { recursive: true });
+  const fileName = `${Date.now()}-${randomUUID()}${extension}`;
+  await writeFile(resolve(uploadsDir, fileName), req.file.buffer);
+  res.status(201).json({ url: publicUploadUrl(req, fileName) });
 });
 
 app.post("/api/ocr/extract", upload.single("image"), async (_req, res) => {

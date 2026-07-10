@@ -1,0 +1,168 @@
+{
+  "source": "gachapon-asset-sheet-source.png",
+  "sheet": "gachapon-asset-sheet.png",
+  "width": 1254,
+  "height": 1254,
+  "components": [
+    {
+      "file": "gachapon-slice-01.png",
+      "x": 45,
+      "y": 49,
+      "w": 674,
+      "h": 874,
+      "area": 475101
+    },
+    {
+      "file": "gachapon-slice-02.png",
+      "x": 372,
+      "y": 975,
+      "w": 348,
+      "h": 219,
+      "area": 58734
+    },
+    {
+      "file": "gachapon-slice-03.png",
+      "x": 59,
+      "y": 924,
+      "w": 279,
+      "h": 281,
+      "area": 51314
+    },
+    {
+      "file": "gachapon-slice-04.png",
+      "x": 728,
+      "y": 611,
+      "w": 252,
+      "h": 265,
+      "area": 43021
+    },
+    {
+      "file": "gachapon-slice-05.png",
+      "x": 977,
+      "y": 611,
+      "w": 251,
+      "h": 265,
+      "area": 42665
+    },
+    {
+      "file": "gachapon-slice-06.png",
+      "x": 728,
+      "y": 343,
+      "w": 251,
+      "h": 264,
+      "area": 42649
+    },
+    {
+      "file": "gachapon-slice-07.png",
+      "x": 730,
+      "y": 73,
+      "w": 252,
+      "h": 263,
+      "area": 42545
+    },
+    {
+      "file": "gachapon-slice-08.png",
+      "x": 977,
+      "y": 343,
+      "w": 250,
+      "h": 264,
+      "area": 42306
+    },
+    {
+      "file": "gachapon-slice-09.png",
+      "x": 976,
+      "y": 75,
+      "w": 251,
+      "h": 261,
+      "area": 42085
+    },
+    {
+      "file": "gachapon-slice-10.png",
+      "x": 1023,
+      "y": 891,
+      "w": 146,
+      "h": 142,
+      "area": 10002
+    },
+    {
+      "file": "gachapon-slice-11.png",
+      "x": 773,
+      "y": 1007,
+      "w": 105,
+      "h": 100,
+      "area": 4312
+    },
+    {
+      "file": "gachapon-slice-12.png",
+      "x": 1078,
+      "y": 1025,
+      "w": 109,
+      "h": 95,
+      "area": 4146
+    },
+    {
+      "file": "gachapon-slice-13.png",
+      "x": 969,
+      "y": 1099,
+      "w": 107,
+      "h": 86,
+      "area": 3406
+    },
+    {
+      "file": "gachapon-slice-14.png",
+      "x": 862,
+      "y": 1082,
+      "w": 92,
+      "h": 91,
+      "area": 3225
+    },
+    {
+      "file": "gachapon-slice-15.png",
+      "x": 949,
+      "y": 1014,
+      "w": 100,
+      "h": 81,
+      "area": 3221
+    },
+    {
+      "file": "gachapon-slice-16.png",
+      "x": 789,
+      "y": 886,
+      "w": 106,
+      "h": 118,
+      "area": 3170
+    },
+    {
+      "file": "gachapon-slice-17.png",
+      "x": 869,
+      "y": 978,
+      "w": 81,
+      "h": 81,
+      "area": 2599
+    },
+    {
+      "file": "gachapon-slice-18.png",
+      "x": 1090,
+      "y": 1120,
+      "w": 92,
+      "h": 76,
+      "area": 2378
+    },
+    {
+      "file": "gachapon-slice-19.png",
+      "x": 925,
+      "y": 898,
+      "w": 86,
+      "h": 93,
+      "area": 1976
+    },
+    {
+      "file": "gachapon-slice-20.png",
+      "x": 773,
+      "y": 1124,
+      "w": 69,
+      "h": 68,
+      "area": 1577
+    }
+  ]
+}

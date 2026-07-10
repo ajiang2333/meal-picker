@@ -22,7 +22,7 @@
       </view>
     </view>
     <view v-if="store" class="store-hero">
-            <view class="hero-cover-shell">
+            <view class="hero-cover-shell" @tap="chooseStoreCover">
         <image
           v-if="!coverError"
           v-show="coverLoaded"
@@ -38,6 +38,10 @@
         </view>
         <view v-if="coverError" class="hero-cover-fallback">
           <text>图片暂时没有加载出来</text>
+        </view>
+        <view class="cover-upload-hint">
+          <uni-icons type="camera" size="14" color="#ffffff" />
+          <text>点击上传店铺图片</text>
         </view>
       </view>
       <view class="hero-content">
@@ -164,6 +168,7 @@ import { onLoad } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
 import { api } from "@/api/client";
 import UserBadge from "@/components/UserBadge.vue";
+import { getCustomStoreCover, setCustomStoreCover } from "@/utils/customImages";
 import type { Dish, Review, Store } from "@/types";
 
 const id = ref("");
@@ -175,8 +180,9 @@ const saving = ref(false);
 const loading = ref(true);
 const coverLoaded = ref(false);
 const coverError = ref(false);
+const localCover = ref("");
 const defaultCover = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80";
-const coverSrc = computed(() => store.value?.coverUrl || defaultCover);
+const coverSrc = computed(() => localCover.value || store.value?.coverUrl || defaultCover);
 const editForm = reactive({
   name: "",
   category: "",
@@ -198,6 +204,7 @@ async function load() {
   try {
     const result = await api.store(id.value) as { store: Store; dishes: Dish[]; reviews: Review[] };
     store.value = result.store;
+    localCover.value = getCustomStoreCover(result.store.id);
     dishes.value = result.dishes;
     reviews.value = result.reviews;
     Object.assign(editForm, {
@@ -231,6 +238,34 @@ function handleCoverError() {
   coverError.value = true;
 }
 
+function chooseStoreCover() {
+  if (!store.value) return;
+  uni.chooseImage({
+    count: 1,
+    sizeType: ["compressed"],
+    sourceType: ["album", "camera"],
+    success: async (result) => {
+      const localUrl = ((result.tempFilePaths || []) as string[])[0] || "";
+      if (!localUrl || !store.value) return;
+      coverLoaded.value = false;
+      coverError.value = false;
+      localCover.value = localUrl;
+      store.value = { ...store.value, coverUrl: localUrl };
+      setCustomStoreCover(store.value.id, localUrl);
+      try {
+        const uploaded = await api.uploadImage(localUrl) as { url: string };
+        localCover.value = uploaded.url;
+        store.value = { ...store.value, coverUrl: uploaded.url };
+        setCustomStoreCover(store.value.id, uploaded.url);
+        await api.updateStore(store.value.id, { coverUrl: uploaded.url });
+        uni.showToast({ title: "店铺图片已更新", icon: "none" });
+      } catch (error) {
+        uni.showToast({ title: "已在本机保存", icon: "none" });
+      }
+    }
+  });
+}
+
 function goBack() {
   if (getCurrentPages().length > 1) {
     uni.navigateBack();
@@ -253,7 +288,8 @@ async function save() {
       tags: editForm.tagsText.split(/[，,、\s]+/).map((item) => item.trim()).filter(Boolean),
       mealTimes: editForm.mealTimesText.split(/[，,、\s]+/).map((item) => item.trim()).filter(Boolean),
       description: editForm.description.trim(),
-      note: editForm.note.trim()
+      note: editForm.note.trim(),
+      coverUrl: coverSrc.value
     });
     editing.value = false;
     uni.showToast({ title: "已更新店铺" });
@@ -407,6 +443,23 @@ function openDish(dishId: string) {
 
 .hero-cover-fallback {
   background: linear-gradient(135deg, rgba(255, 232, 241, 0.95), rgba(229, 255, 239, 0.95));
+}
+
+.cover-upload-hint {
+  position: absolute;
+  right: 18rpx;
+  bottom: 18rpx;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  border-radius: 999rpx;
+  background: rgba(216, 102, 147, 0.86);
+  padding: 10rpx 16rpx;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 900;
+  box-shadow: 0 8rpx 18rpx rgba(216, 102, 147, 0.22);
 }
 
 @keyframes cover-shimmer {

@@ -6,7 +6,13 @@
       <view class="app-nav-right" />
     </view>
     <view v-if="dish" class="dish-hero">
-      <view class="dish-orb">{{ dish.name.slice(0, 1) }}</view>
+      <view class="dish-cover-picker" @tap="chooseDishImage">
+        <image v-if="dishCover" class="dish-cover" :src="dishCover" mode="aspectFill" />
+        <view v-else class="dish-orb">{{ dish.name.slice(0, 1) }}</view>
+        <view class="dish-cover-hint">
+          <uni-icons type="camera" size="13" color="#ffffff" />
+        </view>
+      </view>
       <view class="dish-main">
         <text class="kicker">SPRING DISH NOTE</text>
         <text class="title">{{ dish.name }}</text>
@@ -52,16 +58,44 @@ import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import { api } from "@/api/client";
 import UserBadge from "@/components/UserBadge.vue";
+import { getCustomDishCover, setCustomDishCover } from "@/utils/customImages";
 import type { Dish, Review } from "@/types";
 
 const dish = ref<Dish | null>(null);
 const reviews = ref<Review[]>([]);
+const dishCover = ref("");
 
 onLoad(async (query) => {
   const result = await api.dish(String(query?.id || "")) as { dish: Dish; reviews: Review[] };
   dish.value = result.dish;
+  dishCover.value = getCustomDishCover(result.dish.id) || result.dish.coverUrl || "";
   reviews.value = result.reviews;
 });
+
+function chooseDishImage() {
+  if (!dish.value) return;
+  uni.chooseImage({
+    count: 1,
+    sizeType: ["compressed"],
+    sourceType: ["album", "camera"],
+    success: async (result) => {
+      const localUrl = ((result.tempFilePaths || []) as string[])[0] || "";
+      if (!localUrl || !dish.value) return;
+      dishCover.value = localUrl;
+      setCustomDishCover(dish.value.id, localUrl);
+      try {
+        const uploaded = await api.uploadImage(localUrl) as { url: string };
+        dishCover.value = uploaded.url;
+        dish.value = { ...dish.value, coverUrl: uploaded.url };
+        setCustomDishCover(dish.value.id, uploaded.url);
+        await api.updateDish(dish.value.id, { coverUrl: uploaded.url });
+        uni.showToast({ title: "菜品图片已更新", icon: "none" });
+      } catch (error) {
+        uni.showToast({ title: "已在本机保存", icon: "none" });
+      }
+    }
+  });
+}
 
 function goBack() {
   if (getCurrentPages().length > 1) {
@@ -97,18 +131,48 @@ function goBack() {
   box-shadow: 0 18rpx 44rpx rgba(95, 159, 124, 0.1);
 }
 
+.dish-cover-picker {
+  position: relative;
+  width: 128rpx;
+  height: 128rpx;
+}
+
+.dish-cover,
+.dish-orb {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 50%;
+}
+
+.dish-cover {
+  display: block;
+  border: 6rpx solid rgba(255, 255, 255, 0.82);
+  background: #f3edf1;
+}
+
 .dish-orb {
   display: grid;
   place-items: center;
-  width: 128rpx;
-  height: 128rpx;
   border: 6rpx solid rgba(255, 255, 255, 0.82);
-  border-radius: 50%;
   background: linear-gradient(135deg, #ffb8d0, #8ee6b8);
   color: #ffffff;
   font-size: 44rpx;
   font-weight: 950;
   box-shadow: inset 0 -12rpx 24rpx rgba(255, 255, 255, 0.28);
+}
+
+.dish-cover-hint {
+  position: absolute;
+  right: -2rpx;
+  bottom: -2rpx;
+  display: grid;
+  place-items: center;
+  width: 42rpx;
+  height: 42rpx;
+  border: 4rpx solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  background: #d86693;
+  box-shadow: 0 6rpx 14rpx rgba(216, 102, 147, 0.22);
 }
 
 .dish-main {

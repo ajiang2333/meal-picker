@@ -27,6 +27,7 @@ export type Dish = {
   price: number;
   rating: number;
   disliked: boolean;
+  coverUrl?: string;
 };
 
 export type OrderItemInput = {

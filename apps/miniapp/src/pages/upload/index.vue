@@ -43,12 +43,16 @@
       <u-textarea
         v-model="rawText"
         class="soft-control text-area"
-        placeholder="粘贴订单文字：第一行店铺名，后面每行一个菜品和价格"
+        placeholder="粘贴订单文字：先写店铺名，菜品可用换行、分号、竖线或逗号分隔"
         border="none"
         height="156"
         maxlength="500"
         count
       />
+      <view class="text-order-example">
+        <text class="example-label">示例</text>
+        <text class="example-copy">兰州牛肉面；招牌牛肉面 18；红油小菜 6；冰粉 8</text>
+      </view>
       <u-button
         text="从文字提取"
         shape="circle"
@@ -400,18 +404,28 @@ function closeUploadOverlays() {
 }
 
 function extract() {
-  const lines = rawText.value.split(/\n+/).map((item) => item.trim()).filter(Boolean);
-  if (!lines.length) {
+  const parts = parseOrderText(rawText.value);
+  if (!parts.length) {
     uni.showToast({ title: "先粘贴订单文字", icon: "none" });
     return;
   }
-  form.storeName = lines[0] || form.storeName;
-  const dishes = lines.slice(1).map((line) => {
-    const match = line.match(/(.+?)\s*[¥￥]?\s*(\d+(?:\.\d+)?)/);
+  form.storeName = parts[0] || form.storeName;
+  const dishes = parts.slice(1).map((line) => {
+    const match = line.match(/(.+?)\s*[\u00a5\uffe5]?[\s:]*(\d+(?:\.\d+)?)/);
     return { name: match?.[1]?.trim() || line, price: Number(match?.[2] || 0), rating: 4, disliked: false, note: "" };
   });
   form.dishes = dishes.length ? dishes : form.dishes;
   form.total = form.dishes.reduce((sum, item) => sum + Number(item.price || 0), 0);
+}
+
+function parseOrderText(value: string) {
+  return value
+    .replace(/\r/g, "\n")
+    .replace(/[\uff1b;\uff5c|]/g, "\n")
+    .replace(/[\uff0c,\u3001](?=\s*[^\uff0c,\u3001\uff1b;\uff5c|\n]+?\s*[\u00a5\uffe5]?\s*\d)/g, "\n")
+    .split(/\n+/)
+    .map((item) => item.trim().replace(/^[-*\u2022]+\s*/, ""))
+    .filter(Boolean);
 }
 
 function addDish() {
@@ -616,6 +630,36 @@ onTabItemTap(resetUploadTab);
 .upload-panel {
   display: grid;
   gap: 18rpx;
+}
+
+
+.text-order-example {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  border: 1rpx dashed rgba(216, 102, 147, 0.22);
+  border-radius: 22rpx;
+  background: linear-gradient(135deg, rgba(255, 242, 248, 0.92), rgba(237, 255, 245, 0.9));
+  padding: 16rpx 18rpx;
+}
+
+.example-label {
+  flex: 0 0 auto;
+  border-radius: 999rpx;
+  background: rgba(216, 102, 147, 0.12);
+  padding: 4rpx 12rpx;
+  color: #d86693;
+  font-size: 21rpx;
+  font-weight: 950;
+  line-height: 1.35;
+}
+
+.example-copy {
+  min-width: 0;
+  color: #6f5e6b;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .form-grid,

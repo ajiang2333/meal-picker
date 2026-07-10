@@ -1,7 +1,7 @@
 import type { OrderItemInput } from "@/types";
 
-// const API_BASE = "http://127.0.0.1:8787/api";
-const API_BASE = "http://122.51.38.219:8787/api";
+// API 地址通过 VITE_API_BASE 配置；未配置时使用本地后端。
+const API_BASE = (import.meta.env.VITE_API_BASE || "http://127.0.0.1:8787/api").replace(/\/$/, "");
 
 const mockUsers = [
   { id: "mock-user-1", nickname: "春野小满", avatarColor: "#ffb8d0" },
@@ -242,6 +242,29 @@ export function request<T>(url: string, options: RequestOptions = {}) {
   });
 }
 
+export function uploadImage(filePath: string) {
+  return new Promise<{ url: string }>((resolve, reject) => {
+    uni.uploadFile({
+      url: `${API_BASE}/uploads/images`,
+      filePath,
+      name: "image",
+      header: {
+        "x-user-id": uni.getStorageSync("currentUserId") || ""
+      },
+      success: (response) => {
+        const statusCode = response.statusCode || 0;
+        if (statusCode >= 200 && statusCode < 300) {
+          const data = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+          resolve(data as { url: string });
+        } else {
+          reject(response.data);
+        }
+      },
+      fail: reject
+    });
+  });
+}
+
 function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefined {
   const { path, query } = parseUrl(url);
   const method = options.method || "GET";
@@ -382,6 +405,7 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       tags: payload.tags || store.tags,
       mealTimes: payload.mealTimes || store.mealTimes,
       description: payload.description || store.description,
+      coverUrl: payload.coverUrl || store.coverUrl,
       updatedBy: mockUsers[0]
     });
     return { store } as T;
@@ -595,6 +619,7 @@ export const api = {
   stores: (params = "") => request(`/stores${params}`),
   store: (id: string) => request(`/stores/${id}`),
   dish: (id: string) => request(`/dishes/${id}`),
+  updateDish: (id: string, data: unknown) => request(`/dishes/${id}`, { method: "PUT", data }),
   updateStore: (id: string, data: unknown) => request(`/stores/${id}`, { method: "PUT", data }),
   randomStore: (query: string) => request(`/random${query}`),
   randomPicks: (query = "") => request(`/random-picks${query}`),
@@ -614,5 +639,6 @@ export const api = {
   deleteOrder: (id: string) => request(`/orders/${id}`, { method: "DELETE" }),
   reviews: () => request("/reviews"),
   deleteReview: (id: string) => request(`/reviews/${id}`, { method: "DELETE" }),
-  stats: () => request("/stats")
+  stats: () => request("/stats"),
+  uploadImage
 };

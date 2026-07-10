@@ -281,20 +281,16 @@ sudo systemctl restart waimai-picker-api
 本地小程序 API 地址在：
 
 ```text
-apps/miniapp/src/api/client.ts
+apps/miniapp/.env.local
 ```
 
-当前开发默认是：
+在本机 `apps/miniapp/.env.local` 中配置为：
 
-```ts
-const API_BASE = "http://127.0.0.1:8787/api";
+```text
+VITE_API_BASE=http://服务器公网IP:8787/api
 ```
 
-部署后，体验阶段可以先改为：
-
-```ts
-const API_BASE = "http://服务器公网IP:8787/api";
-```
+当前接口使用公网 IP 和 HTTP，适合开发者工具体验测试；正式发布需要换成已备案 HTTPS 域名，并在小程序后台配置 request 合法域名。
 
 微信开发者工具中需要勾选：
 
@@ -304,9 +300,10 @@ const API_BASE = "http://服务器公网IP:8787/api";
 
 正式或更稳定的体验版建议使用 HTTPS 域名：
 
-```ts
+```text
 const API_BASE = "https://api.你的域名.com/api";
 ```
+
 
 ## 10. 可选：Nginx 反向代理
 
@@ -460,3 +457,23 @@ bash apps/api/deploy/deploy-ubuntu.sh
 8. 如何开第二个服务器终端测试
    - 腾讯云控制台再点一次一键登录即可打开新终端。
    - 或本地 PowerShell 执行 `ssh ubuntu@服务器公网IP`。
+
+
+
+## 小程序本地私有配置
+
+前端源码不提交真实公网 API 地址和真实小程序 AppID。需要连接公网后端或使用自己的小程序 AppID 时，在本机创建：
+
+```text
+apps/miniapp/.env.local
+```
+
+内容示例：
+
+```text
+VITE_API_BASE=http://服务器公网IP:8787/api
+VITE_MP_WEIXIN_APPID=wx开头的微信小程序AppID
+VITE_MP_ALIPAY_APPID=
+```
+
+`.env.local` 已被 git 忽略，只在本机使用。构建脚本会临时注入 AppID，构建完成后还原 `src/manifest.json`。

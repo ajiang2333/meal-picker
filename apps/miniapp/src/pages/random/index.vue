@@ -52,45 +52,54 @@
     <view class="wheel-card">
       <view class="wheel-topline">
         <view>
-          <text class="section-title">春日食物星盘</text>
+          <text class="section-title">春日扭蛋抽选</text>
           <text class="section-note">{{ feedbackText }}</text>
         </view>
-        <view class="spark-badge">抽选中枢</view>
+        <view class="spark-badge">扭蛋机</view>
       </view>
 
-      <view class="wheel-zone">
-        <view class="orbit-ring" />
-        <view class="pointer" />
-        <view
-          :class="['wheel', { spinning: isSpinning }]"
-          :style="{ transform: `rotate(${wheelRotation}deg)` }"
-        >
-          <view class="wheel-core">
-            <text>MENU</text>
-            <text>DRAW</text>
+      <view class="gacha-zone">
+        <image class="gacha-deco gacha-deco-a" :src="gachaDecorations[0]" mode="aspectFit" />
+        <image class="gacha-deco gacha-deco-b" :src="gachaDecorations[1]" mode="aspectFit" />
+        <view :class="['gacha-stage', { spinning: isSpinning, dropping: dropCapsuleVisible }]">
+          <image class="gacha-machine" :src="gachaMachine" mode="widthFix" />
+          <view class="gacha-globe">
+            <view
+              v-for="(item, index) in wheelItems"
+              :key="item.id"
+              class="gacha-capsule"
+              :style="capsuleStyle(index)"
+              @tap.stop="openWheelItem(item)"
+            >
+              <image class="capsule-shell" :src="capsuleAsset(index)" mode="aspectFit" />
+              <image class="capsule-cover" :src="item.coverUrl || defaultCover" mode="aspectFill" />
+              <text class="capsule-label">{{ gachaItemLabel(item) }}</text>
+            </view>
           </view>
-          <view
-            v-for="(item, index) in wheelItems"
-            :key="item.id"
-            class="wheel-label"
-            :style="wheelLabelStyle(index)"
-            @tap.stop="openWheelItem(item)"
-          >
-            <image class="wheel-food-cover" :src="item.coverUrl || defaultCover" mode="aspectFill" />
-            <text class="wheel-food-name">{{ wheelItemLabel(item) }}</text>
+          <view :class="['gacha-knob-hit', { disabled: isSpinning }]" @tap="spin">
+            <view class="gacha-knob-plate">
+              <image class="gacha-knob-img" :src="gachaKnob" mode="aspectFit" />
+              <text class="knob-label">{{ isSpinning ? "抽选中" : "扭一下" }}</text>
+            </view>
+          </view>
+          <view class="gacha-outlet" @tap="openWinner">
+            <view v-if="dropCapsuleVisible" class="drop-capsule" :key="dropCapsuleIndex">
+              <image class="drop-capsule-shell" :src="capsuleAsset(dropCapsuleIndex)" mode="aspectFit" />
+              <image v-if="winner" class="drop-capsule-cover" :src="winner.coverUrl || defaultCover" mode="aspectFill" />
+            </view>
           </view>
         </view>
       </view>
 
       <button
         :class="['draw-button', { loading: isSpinning }]"
-        :disabled="isSpinning || candidateCount === 0"
+        :disabled="isSpinning"
         @tap="spin"
       >
         {{ isSpinning ? "春风正在转..." : "开始抽选" }}
       </button>
 
-      <view class="winner-panel" @tap="openWinner">
+      <view :class="['winner-panel', { blurring: isSpinning }]" @tap="openWinner">
         <image class="winner-cover" :src="winner?.coverUrl || defaultCover" mode="aspectFill" />
         <view class="winner-copy">
           <text class="winner-kicker">{{ winner ? "今日命定" : "等待开奖" }}</text>
@@ -98,6 +107,16 @@
           <text class="winner-meta">
             {{ winner ? `${winner.category} · ${winner.rating.toFixed(1)}分 · 点击查看店铺` : "筛选后点击开始抽选" }}
           </text>
+        </view>
+        <view v-if="isSpinning" class="winner-drawing-state">
+          <view class="drawing-orb">
+            <u-loading-icon color="#d86693" size="22" />
+          </view>
+          <view class="drawing-copy">
+            <text class="drawing-title">正在摇出今天的命定</text>
+            <text class="drawing-subtitle">胶囊滚动中，结果马上出舱</text>
+          </view>
+          <view class="drawing-dots"><view /><view /><view /></view>
         </view>
       </view>
     </view>
@@ -150,53 +169,54 @@ const category = ref("全部");
 const mealTime = ref("全部");
 const excludeDisliked = ref(true);
 const winner = ref<Store | null>(null);
+const candidateStores = ref<Store[]>([]);
 const candidateCount = ref(0);
 const recentRecords = ref<RandomPick[]>([]);
 const randomTotal = ref(0);
 const isSpinning = ref(false);
-const wheelRotation = ref(12);
+const dropCapsuleVisible = ref(false);
+const dropCapsuleIndex = ref(0);
 const feedbackText = ref("把纠结丢进粉绿星盘里");
 const defaultCover = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80";
+const gachaMachine = "/static/gachapon/gachapon-machine.png";
+const gachaKnob = "/static/gachapon/gachapon-knob.png";
+const capsuleAssets = [
+  "/static/gachapon/gachapon-capsule-01.png",
+  "/static/gachapon/gachapon-capsule-02.png",
+  "/static/gachapon/gachapon-capsule-03.png",
+  "/static/gachapon/gachapon-capsule-04.png",
+  "/static/gachapon/gachapon-capsule-05.png",
+  "/static/gachapon/gachapon-capsule-06.png"
+];
+const gachaDecorations = [
+  "/static/gachapon/gachapon-deco-01.png",
+  "/static/gachapon/gachapon-deco-02.png"
+];
 
 type WheelItem = {
   id: string;
   name: string;
   category: string;
   coverUrl?: string;
-  fallback?: boolean;
 };
 
-const fallbackWheelItems: WheelItem[] = [
-  { id: "fallback-bento", name: "樱花便当研究所", category: "快餐", coverUrl: "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=500&q=80", fallback: true },
-  { id: "fallback-mint-tea", name: "薄荷奶茶补给站", category: "奶茶", coverUrl: "https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format&fit=crop&w=500&q=80", fallback: true },
-  { id: "fallback-noodle", name: "粉面小星实验室", category: "粉面", coverUrl: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=500&q=80", fallback: true },
-  { id: "fallback-salad", name: "轻食花园能量舱", category: "轻食", coverUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=500&q=80", fallback: true },
-  { id: "fallback-hotpot", name: "火锅云朵冒泡屋", category: "火锅", coverUrl: "https://images.unsplash.com/photo-1615361200141-f45040f367be?auto=format&fit=crop&w=500&q=80", fallback: true },
-  { id: "fallback-bbq", name: "烧烤流星补完计划", category: "烧烤", coverUrl: "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&w=500&q=80", fallback: true }
-];
 
-const wheelItems = computed<WheelItem[]>(() => {
-  const recent = recentRecords.value
-    .map((item) => ({
-      id: item.store.id,
-      name: item.store.name,
-      category: item.store.category,
-      coverUrl: item.store.coverUrl || defaultCover
-    }))
-    .filter((item) => item.name);
-  const uniqueItems = new Map<string, WheelItem>();
-  [...recent, ...fallbackWheelItems].forEach((item) => {
-    if (!uniqueItems.has(item.name)) uniqueItems.set(item.name, item);
-  });
-  return [...uniqueItems.values()].slice(0, 6);
-});
+const wheelItems = computed<WheelItem[]>(() => candidateStores.value.slice(0, 6).map((store) => ({
+  id: store.id,
+  name: store.name,
+  category: store.category,
+  coverUrl: store.coverUrl || defaultCover
+})));
 
 async function loadCandidateCount() {
   try {
-    const result = await api.randomStore(query(true)) as { store: Store | null; candidateCount: number };
-    candidateCount.value = result.candidateCount || 0;
-    feedbackText.value = result.candidateCount ? "星盘已经准备好啦" : "当前筛选没有候选店铺";
+    const result = await api.stores(candidateQuery()) as { stores: Store[] };
+    const candidates = result.stores.filter((store) => !excludeDisliked.value || store.rating >= 3);
+    candidateStores.value = candidates;
+    candidateCount.value = candidates.length;
+    feedbackText.value = candidates.length ? "星盘已经准备好啦" : "当前筛选没有候选店铺";
   } catch (error) {
+    candidateStores.value = [];
     candidateCount.value = 0;
     feedbackText.value = "抽选服务还没连上";
   }
@@ -213,6 +233,14 @@ async function loadRecent() {
   }
 }
 
+function candidateQuery() {
+  const params = [
+    ["category", category.value],
+    ["mealTime", mealTime.value]
+  ];
+  return "?" + params.map(([key, value]) => key + "=" + encodeURIComponent(value)).join("&");
+}
+
 function query(peek = false) {
   const params = [
     ["category", category.value],
@@ -226,18 +254,21 @@ function query(peek = false) {
 function setCategory(value: string) {
   category.value = value;
   winner.value = null;
+  dropCapsuleVisible.value = false;
   loadCandidateCount();
 }
 
 function setMealTime(value: string) {
   mealTime.value = value;
   winner.value = null;
+  dropCapsuleVisible.value = false;
   loadCandidateCount();
 }
 
 function toggleExclude() {
   excludeDisliked.value = !excludeDisliked.value;
   winner.value = null;
+  dropCapsuleVisible.value = false;
   loadCandidateCount();
 }
 
@@ -246,20 +277,35 @@ function resetRandomPage() {
   mealTime.value = "全部";
   excludeDisliked.value = true;
   winner.value = null;
+  dropCapsuleVisible.value = false;
   isSpinning.value = false;
-  wheelRotation.value = 12;
   feedbackText.value = "把纠结丢进粉绿星盘里";
   uni.pageScrollTo({ scrollTop: 0, duration: 0 });
   loadCandidateCount();
   loadRecent();
 }
 
+function showNoCandidateModal() {
+  uni.showModal({
+    title: "暂无可抽店铺",
+    content: "当前筛选条件下没有候选店铺，试试切换分类、时段，或关闭排除不喜欢。",
+    showCancel: false,
+    confirmText: "知道了",
+    confirmColor: "#d86693"
+  });
+}
+
 async function spin() {
-  if (isSpinning.value || candidateCount.value === 0) return;
+  if (isSpinning.value) return;
+  if (candidateCount.value === 0) {
+    feedbackText.value = "当前筛选没有候选店铺";
+    showNoCandidateModal();
+    return;
+  }
   isSpinning.value = true;
-  winner.value = null;
+  dropCapsuleVisible.value = false;
+  dropCapsuleIndex.value = Math.floor(Math.random() * capsuleAssets.length);
   feedbackText.value = "春风正在翻菜单...";
-  wheelRotation.value += 900 + Math.floor(Math.random() * 360);
 
   try {
     const [result] = await Promise.all([
@@ -268,7 +314,9 @@ async function spin() {
     ]);
     winner.value = result.store;
     candidateCount.value = result.candidateCount || 0;
+    dropCapsuleVisible.value = Boolean(result.store);
     feedbackText.value = result.store ? `${result.store.name} 被星盘选中` : "没有抽到符合条件的店铺";
+    if (!result.store) showNoCandidateModal();
     await loadRecent();
   } catch (error) {
     feedbackText.value = "暂时抽不出来，检查服务后再试";
@@ -278,6 +326,7 @@ async function spin() {
 }
 
 function openWinner() {
+  if (isSpinning.value) return;
   if (winner.value) uni.navigateTo({ url: `/pages/store-detail/index?id=${winner.value.id}` });
 }
 
@@ -286,7 +335,7 @@ function openStore(id: string) {
 }
 
 function openWheelItem(item: WheelItem) {
-  if (!item.fallback) openStore(item.id);
+  openStore(item.id);
 }
 
 function openMore() {
@@ -294,16 +343,68 @@ function openMore() {
   uni.switchTab({ url: "/pages/me/index" });
 }
 
-function wheelLabelStyle(index: number) {
-  const total = Math.max(wheelItems.value.length, 1);
-  const angle = index * (360 / total);
+function capsuleAsset(index: number) {
+  return capsuleAssets[index % capsuleAssets.length];
+}
+
+const capsuleLayouts: Record<number, Array<{ left: number; top: number; rotate: number; stirXa: number; stirXb: number; stirYa: number; stirYb: number; delay: number }>> = {
+  1: [
+    { left: 156, top: 132, rotate: -4, stirXa: -18, stirXb: 18, stirYa: -18, stirYb: 18, delay: 0 }
+  ],
+  2: [
+    { left: 92, top: 128, rotate: -12, stirXa: -22, stirXb: 18, stirYa: -18, stirYb: 16, delay: 0 },
+    { left: 220, top: 128, rotate: 12, stirXa: 22, stirXb: -18, stirYa: 16, stirYb: -18, delay: -0.18 }
+  ],
+  3: [
+    { left: 54, top: 120, rotate: -13, stirXa: -24, stirXb: 18, stirYa: -18, stirYb: 18, delay: 0 },
+    { left: 156, top: 58, rotate: 8, stirXa: 20, stirXb: -18, stirYa: 18, stirYb: -16, delay: -0.16 },
+    { left: 258, top: 132, rotate: 14, stirXa: 24, stirXb: -20, stirYa: -18, stirYb: 20, delay: -0.3 }
+  ],
+  4: [
+    { left: 58, top: 88, rotate: -12, stirXa: -24, stirXb: 18, stirYa: -22, stirYb: 18, delay: 0 },
+    { left: 226, top: 84, rotate: 13, stirXa: 24, stirXb: -20, stirYa: -18, stirYb: 22, delay: -0.16 },
+    { left: 82, top: 206, rotate: 10, stirXa: -20, stirXb: 24, stirYa: 18, stirYb: -16, delay: -0.3 },
+    { left: 218, top: 210, rotate: -9, stirXa: 22, stirXb: -26, stirYa: 16, stirYb: -20, delay: -0.42 }
+  ],
+  5: [
+    { left: 38, top: 84, rotate: -12, stirXa: -24, stirXb: 18, stirYa: -22, stirYb: 18, delay: 0 },
+    { left: 156, top: 38, rotate: 8, stirXa: 20, stirXb: -18, stirYa: 20, stirYb: -16, delay: -0.12 },
+    { left: 258, top: 90, rotate: 14, stirXa: 26, stirXb: -20, stirYa: -18, stirYb: 22, delay: -0.24 },
+    { left: 78, top: 208, rotate: 11, stirXa: -20, stirXb: 24, stirYa: 18, stirYb: -16, delay: -0.34 },
+    { left: 214, top: 210, rotate: -9, stirXa: 22, stirXb: -26, stirYa: 16, stirYb: -20, delay: -0.18 }
+  ],
+  6: [
+    { left: 38, top: 72, rotate: -12, stirXa: -24, stirXb: 18, stirYa: -22, stirYb: 18, delay: 0 },
+    { left: 156, top: 36, rotate: 8, stirXa: 20, stirXb: -18, stirYa: 20, stirYb: -16, delay: -0.12 },
+    { left: 274, top: 82, rotate: 14, stirXa: 26, stirXb: -20, stirYa: -18, stirYb: 22, delay: -0.24 },
+    { left: 78, top: 198, rotate: 11, stirXa: -20, stirXb: 24, stirYa: 18, stirYb: -16, delay: -0.34 },
+    { left: 230, top: 206, rotate: -9, stirXa: 22, stirXb: -26, stirYa: 16, stirYb: -20, delay: -0.18 },
+    { left: 166, top: 144, rotate: -2, stirXa: -18, stirXb: 18, stirYa: -24, stirYb: 20, delay: -0.42 }
+  ]
+};
+
+function capsuleStyle(index: number) {
+  const count = Math.min(Math.max(wheelItems.value.length, 1), 6);
+  const item = capsuleLayouts[count][index] || capsuleLayouts[6][index % 6];
   return {
-    transform: `rotate(${angle}deg) translateY(-184rpx) rotate(${-angle}deg)`
+    left: item.left + "rpx",
+    top: item.top + "rpx",
+    "--base-rotate": item.rotate + "deg",
+    "--stir-x-a": item.stirXa + "rpx",
+    "--stir-x-b": item.stirXb + "rpx",
+    "--stir-y-a": item.stirYa + "rpx",
+    "--stir-y-b": item.stirYb + "rpx",
+    "--roll-x-c": Math.round((item.stirXa + item.stirXb) * -0.45) + "rpx",
+    "--roll-y-c": Math.round(Math.abs(item.stirYa) + 18) + "rpx",
+    "--roll-x-d": Math.round(item.stirXb * 0.55) + "rpx",
+    "--roll-y-d": Math.round(Math.abs(item.stirYb) * -0.35) + "rpx",
+    animationDelay: item.delay + "s",
+    transform: "rotate(var(--base-rotate))"
   };
 }
 
-function wheelItemLabel(item: WheelItem) {
-  return item.name.length > 14 ? `${item.name.slice(0, 14)}...` : item.name;
+function gachaItemLabel(item: WheelItem) {
+  return item.name.length > 6 ? item.name.slice(0, 6) + "..." : item.name;
 }
 
 function wait(ms: number) {
@@ -571,117 +672,255 @@ onShow(() => {
   font-weight: 900;
 }
 
-.wheel-zone {
+.gacha-zone {
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 690rpx;
-  margin: 2rpx 0 18rpx;
-}
-
-.orbit-ring {
-  position: absolute;
-  width: 620rpx;
-  height: 620rpx;
-  border: 2rpx dashed rgba(216, 102, 147, 0.34);
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.5) 0 31%, transparent 32% 100%),
-    conic-gradient(from -20deg, rgba(255, 217, 231, 0.4), rgba(201, 244, 216, 0.34), rgba(255, 243, 199, 0.32), rgba(247, 217, 255, 0.34), rgba(191, 241, 227, 0.36), rgba(255, 208, 221, 0.4));
-}
-
-.pointer {
-  position: absolute;
-  top: 18rpx;
-  z-index: 4;
-  width: 0;
-  height: 0;
-  border-left: 28rpx solid transparent;
-  border-right: 28rpx solid transparent;
-  border-top: 60rpx solid #d86693;
-  filter: drop-shadow(0 8rpx 8rpx rgba(216, 102, 147, 0.24));
-}
-
-.wheel {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 560rpx;
-  height: 560rpx;
-  border: 10rpx solid rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  background:
-    conic-gradient(
-      from -20deg,
-      #ffd9e7 0deg 60deg,
-      #c9f4d8 60deg 120deg,
-      #fff3c7 120deg 180deg,
-      #f7d9ff 180deg 240deg,
-      #bff1e3 240deg 300deg,
-      #ffd0dd 300deg 360deg
-    );
-  box-shadow:
-    0 22rpx 48rpx rgba(205, 110, 152, 0.24),
-    inset 0 0 0 12rpx rgba(255, 255, 255, 0.42);
-  transition: transform 0.95s cubic-bezier(0.16, 0.82, 0.26, 1);
-}
-
-.wheel.spinning {
-  transition-duration: 1.05s;
-}
-
-.wheel-core {
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 136rpx;
-  height: 136rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.88);
-  color: #d86693;
-  font-size: 22rpx;
-  font-weight: 950;
-  box-shadow: inset 0 -10rpx 18rpx rgba(176, 234, 200, 0.35);
-}
-
-.wheel-label {
-  position: absolute;
-  z-index: 3;
-  left: 50%;
-  top: 50%;
-  display: grid;
-  grid-template-rows: 82rpx minmax(44rpx, auto);
-  gap: 8rpx;
-  align-items: center;
-  justify-items: center;
-  width: 156rpx;
-  min-height: 132rpx;
-  margin-left: -78rpx;
-  margin-top: -66rpx;
-  padding: 0;
-  color: #2f4f40;
-  text-align: center;
-  text-shadow: 0 2rpx 8rpx rgba(255, 255, 255, 0.95);
-}
-
-.wheel-food-cover {
-  width: 82rpx;
-  height: 82rpx;
-  border: 4rpx solid rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  background: #f3edf1;
-  box-shadow: 0 8rpx 18rpx rgba(95, 159, 124, 0.16);
-}
-
-.wheel-food-name {
-  display: -webkit-box;
+  min-height: 760rpx;
+  margin: 4rpx 0 18rpx;
   overflow: hidden;
-  color: #2f4f40;
-  font-size: 22rpx;
+}
+
+.gacha-stage {
+  position: relative;
+  width: 100%;
+  max-width: 640rpx;
+  height: 748rpx;
+  display: grid;
+  place-items: center;
+}
+
+.gacha-machine {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 2;
+  width: 560rpx;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 22rpx 38rpx rgba(205, 110, 152, 0.2));
+}
+
+.gacha-deco {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.gacha-deco-a {
+  left: 8rpx;
+  top: 70rpx;
+  width: 116rpx;
+  height: 116rpx;
+  transform: rotate(-12deg);
+}
+
+.gacha-deco-b {
+  right: 4rpx;
+  bottom: 128rpx;
+  width: 96rpx;
+  height: 96rpx;
+  transform: rotate(14deg);
+}
+
+.gacha-globe {
+  position: absolute;
+  left: 50%;
+  top: 92rpx;
+  z-index: 4;
+  width: 418rpx;
+  height: 358rpx;
+  overflow: hidden;
+  border-radius: 48% 48% 42% 42% / 52% 52% 44% 44%;
+  transform: translateX(-50%);
+}
+
+.gacha-capsule {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 106rpx;
+  height: 116rpx;
+  transform-origin: center;
+}
+
+.gacha-stage.spinning .gacha-globe {
+  animation: gacha-globe-wobble 0.62s ease-in-out infinite;
+}
+
+.gacha-stage.spinning .gacha-capsule {
+  animation: gacha-capsule-roll 0.72s linear infinite;
+}
+
+
+.capsule-shell {
+  position: absolute;
+  width: 102rpx;
+  height: 102rpx;
+  z-index: 1;
+}
+
+.capsule-cover {
+  position: relative;
+  z-index: 2;
+  width: 42rpx;
+  height: 42rpx;
+  margin-top: -16rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: #fff8fb;
+}
+
+.capsule-label {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 3;
+  width: 138rpx;
+  max-width: 138rpx;
+  min-height: 30rpx;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0 8rpx;
+  color: #315244;
+  font-size: 17rpx;
   font-weight: 950;
-  line-height: 1.18;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  line-height: 30rpx;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: 0 4rpx 10rpx rgba(95, 159, 124, 0.1);
+}
+
+.gacha-knob-hit {
+  position: absolute;
+  left: 50%;
+  bottom: 134rpx;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  width: 188rpx;
+  height: 188rpx;
+  margin-left: -4rpx;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.gacha-knob-hit.disabled {
+  opacity: 0.96;
+}
+
+.gacha-knob-plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 178rpx;
+  height: 178rpx;
+  transform: rotate(-8deg);
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 10rpx 18rpx rgba(189, 91, 132, 0.2));
+}
+
+.gacha-stage.spinning .gacha-knob-plate {
+  animation: gacha-key-twist 0.58s cubic-bezier(0.55, 0.04, 0.32, 1) infinite;
+}
+
+.gacha-knob-img {
+  position: absolute;
+  inset: 0;
+  width: 178rpx;
+  height: 178rpx;
+  opacity: 1;
+}
+
+.knob-label {
+  position: relative;
+  z-index: 2;
+  margin-top: -4rpx;
+  max-width: 92rpx;
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 950;
+  line-height: 1.04;
+  text-align: center;
+  text-shadow: 0 3rpx 8rpx rgba(137, 52, 91, 0.36);
+  transform: rotate(-14deg);
+}
+
+.gacha-outlet {
+  position: absolute;
+  left: 50%;
+  bottom: 54rpx;
+  z-index: 7;
+  width: 252rpx;
+  height: 156rpx;
+  overflow: visible;
+  transform: translateX(-50%);
+}
+
+.drop-capsule {
+  position: absolute;
+  left: 50%;
+  top: -76rpx;
+  width: 82rpx;
+  height: 88rpx;
+  transform-origin: 50% 50%;
+  animation: gacha-capsule-drop 0.86s cubic-bezier(0.2, 0.78, 0.24, 1) forwards;
+}
+
+.drop-capsule-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 82rpx;
+  height: 88rpx;
+}
+
+.drop-capsule-cover {
+  position: absolute;
+  left: 50%;
+  top: 16rpx;
+  z-index: 2;
+  width: 30rpx;
+  height: 30rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  background: #fff8fb;
+  transform: translateX(-50%);
+}
+
+@keyframes gacha-key-twist {
+  0% { transform: rotate(-8deg) scale(1); }
+  18% { transform: rotate(-30deg) scale(1.03); }
+  42% { transform: rotate(28deg) scale(1.04); }
+  68% { transform: rotate(-20deg) scale(1.02); }
+  100% { transform: rotate(-8deg) scale(1); }
+}
+
+@keyframes gacha-globe-wobble {
+  0% { transform: translateX(-50%) rotate(0deg) scale(1); }
+  28% { transform: translateX(-50%) rotate(-2.6deg) scale(1.012); }
+  58% { transform: translateX(-50%) rotate(2.2deg) scale(1.018); }
+  100% { transform: translateX(-50%) rotate(0deg) scale(1); }
+}
+
+@keyframes gacha-capsule-roll {
+  0% { transform: translate3d(0, 0, 0) rotate(var(--base-rotate)) scale(1); }
+  16% { transform: translate3d(var(--stir-x-a), var(--stir-y-a), 0) rotate(calc(var(--base-rotate) + 105deg)) scale(1.03); }
+  36% { transform: translate3d(var(--roll-x-c), var(--roll-y-c), 0) rotate(calc(var(--base-rotate) + 196deg)) scale(0.96); }
+  58% { transform: translate3d(var(--stir-x-b), var(--stir-y-b), 0) rotate(calc(var(--base-rotate) + 282deg)) scale(1.02); }
+  78% { transform: translate3d(var(--roll-x-d), var(--roll-y-d), 0) rotate(calc(var(--base-rotate) + 335deg)) scale(0.99); }
+  100% { transform: translate3d(0, 0, 0) rotate(calc(var(--base-rotate) + 360deg)) scale(1); }
+}
+
+@keyframes gacha-capsule-drop {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-24rpx) scale(0.5) rotate(-32deg); }
+  24% { opacity: 1; transform: translateX(-50%) translateY(42rpx) scale(0.68) rotate(18deg); }
+  58% { opacity: 1; transform: translateX(-50%) translateY(218rpx) scale(0.82) rotate(-14deg); }
+  78% { transform: translateX(-50%) translateY(184rpx) scale(0.78) rotate(10deg); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(210rpx) scale(0.8) rotate(-6deg); }
 }
 
 .draw-button {
@@ -704,25 +943,106 @@ onShow(() => {
   border: 0;
 }
 
-.draw-button[disabled] {
-  opacity: 0.58;
-}
-
 .draw-button.loading {
   background: linear-gradient(135deg, #8ee6b8, #ff98bd);
 }
 
 .winner-panel {
+  position: relative;
   display: grid;
   grid-template-columns: 116rpx 1fr;
   gap: 18rpx;
   align-items: center;
+  overflow: hidden;
   border: 1rpx solid rgba(255, 190, 214, 0.82);
   border-radius: 28rpx;
   background: #fff8fb;
   padding: 16rpx;
 }
 
+.winner-panel.blurring .winner-cover,
+.winner-panel.blurring .winner-copy {
+  filter: blur(8rpx);
+  opacity: 0.28;
+  transform: scale(0.98);
+  transition: filter 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+.winner-cover,
+.winner-copy {
+  transition: filter 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+.winner-drawing-state {
+  position: absolute;
+  inset: 10rpx;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 72rpx 1fr auto;
+  align-items: center;
+  gap: 16rpx;
+  border: 1rpx solid rgba(216, 102, 147, 0.14);
+  border-radius: 24rpx;
+  background:
+    linear-gradient(135deg, rgba(255, 248, 251, 0.9), rgba(235, 255, 243, 0.92)),
+    rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 1rpx rgba(255, 255, 255, 0.72);
+  pointer-events: none;
+}
+
+.drawing-orb {
+  display: grid;
+  place-items: center;
+  width: 58rpx;
+  height: 58rpx;
+  margin-left: 14rpx;
+  border-radius: 50%;
+  background: #ffe5ef;
+  box-shadow: inset 0 -8rpx 14rpx rgba(216, 102, 147, 0.1);
+}
+
+.drawing-copy {
+  min-width: 0;
+}
+
+.drawing-title {
+  display: block;
+  color: #513d4a;
+  font-size: 28rpx;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.drawing-subtitle {
+  display: block;
+  margin-top: 6rpx;
+  color: #6d8b7d;
+  font-size: 21rpx;
+  font-weight: 800;
+}
+
+.drawing-dots {
+  display: flex;
+  align-items: center;
+  gap: 7rpx;
+  padding-right: 18rpx;
+}
+
+.drawing-dots view {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #d86693;
+  animation: drawing-dot-bounce 0.72s ease-in-out infinite;
+}
+
+.drawing-dots view:nth-child(2) { animation-delay: 0.12s; }
+.drawing-dots view:nth-child(3) { animation-delay: 0.24s; }
+
+@keyframes drawing-dot-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.42; }
+  50% { transform: translateY(-7rpx); opacity: 1; }
+}
 .winner-cover {
   width: 116rpx;
   height: 116rpx;

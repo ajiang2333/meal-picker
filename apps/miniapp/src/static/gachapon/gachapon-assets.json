@@ -1,0 +1,29 @@
+{
+  "note": "Generated UI cutout assets for the random-page gashapon draw UI. Static frontend assets only; no backend logic changed.",
+  "source": "src/static/gachapon/gachapon-asset-sheet-source.png",
+  "transparentSheet": "src/static/gachapon/gachapon-asset-sheet.png",
+  "machine": "src/static/gachapon/gachapon-machine.png",
+  "knob": "src/static/gachapon/gachapon-knob.png",
+  "resultTray": "src/static/gachapon/gachapon-result-tray.png",
+  "capsules": [
+    "src/static/gachapon/gachapon-capsule-01.png",
+    "src/static/gachapon/gachapon-capsule-02.png",
+    "src/static/gachapon/gachapon-capsule-03.png",
+    "src/static/gachapon/gachapon-capsule-04.png",
+    "src/static/gachapon/gachapon-capsule-05.png",
+    "src/static/gachapon/gachapon-capsule-06.png"
+  ],
+  "decorations": [
+    "src/static/gachapon/gachapon-deco-01.png",
+    "src/static/gachapon/gachapon-deco-02.png",
+    "src/static/gachapon/gachapon-deco-03.png",
+    "src/static/gachapon/gachapon-deco-04.png",
+    "src/static/gachapon/gachapon-deco-05.png",
+    "src/static/gachapon/gachapon-deco-06.png",
+    "src/static/gachapon/gachapon-deco-07.png",
+    "src/static/gachapon/gachapon-deco-08.png",
+    "src/static/gachapon/gachapon-deco-09.png",
+    "src/static/gachapon/gachapon-deco-10.png",
+    "src/static/gachapon/gachapon-deco-11.png"
+  ]
+}

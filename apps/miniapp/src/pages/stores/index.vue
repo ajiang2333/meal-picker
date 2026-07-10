@@ -72,13 +72,6 @@
       <view v-else class="empty-panel">
       <text class="empty-title">没有找到匹配店铺</text>
       <text class="empty-copy">换个关键词或回到全部分类看看。</text>
-      <u-button
-        text="查看全部"
-        shape="circle"
-        color="linear-gradient(135deg, #ffbad2 0%, #97ecc1 100%)"
-        custom-style="height: 42px; margin-top: 14px; color: #5d3753; font-weight: 900;"
-        @click="resetFilters"
-      />
     </view>
     </view>
   </view>

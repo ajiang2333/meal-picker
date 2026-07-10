@@ -15,3 +15,10 @@ apps/miniapp/dist/
 
 .codex_github_known_hosts
 *.db
+apps/api/uploads/
+!.env.production.example
+
+# Local restaurant crawl data and generated import files
+outputs/wuhou_jky_fuzhong_10km/
+tmp/
+scripts/build_restaurant_dataset.mjs
