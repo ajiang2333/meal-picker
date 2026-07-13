@@ -41,7 +41,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment:
       name: production
     concurrency:
@@ -80,6 +80,7 @@ jobs:
             --exclude='apps/api/.env' \
             --exclude='apps/api/uploads' \
             -czf "/tmp/waimai-picker-${GITHUB_SHA}.tar.gz" .
+          du -h "/tmp/waimai-picker-${GITHUB_SHA}.tar.gz"
 
       - name: Configure SSH
         env:
@@ -92,6 +93,20 @@ jobs:
           printf '%s\n' "$SERVER_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Verify SSH connection
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ vars.SERVER_PORT || '22' }}
+        run: |
+          ssh -p "$SERVER_PORT" -i ~/.ssh/waimai-picker-deploy \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ConnectionAttempts=1 \
+            -o StrictHostKeyChecking=yes \
+            "${SERVER_USER}@${SERVER_HOST}" \
+            "echo 'SSH connection successful'"
+
       - name: Upload release
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
@@ -99,6 +114,12 @@ jobs:
           SERVER_PORT: ${{ vars.SERVER_PORT || '22' }}
         run: |
           scp -P "$SERVER_PORT" -i ~/.ssh/waimai-picker-deploy \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ConnectionAttempts=1 \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
             "/tmp/waimai-picker-${GITHUB_SHA}.tar.gz" \
             "apps/api/deploy/deploy-ubuntu.sh" \
             "${SERVER_USER}@${SERVER_HOST}:/tmp/"
@@ -110,6 +131,12 @@ jobs:
           SERVER_PORT: ${{ vars.SERVER_PORT || '22' }}
         run: |
           ssh -p "$SERVER_PORT" -i ~/.ssh/waimai-picker-deploy \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ConnectionAttempts=1 \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
             "${SERVER_USER}@${SERVER_HOST}" \
             "bash /tmp/deploy-ubuntu.sh /tmp/waimai-picker-${GITHUB_SHA}.tar.gz ${GITHUB_SHA}"
 
