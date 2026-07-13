@@ -1,5 +1,6 @@
 ﻿import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 const [command = "build", platform = "h5"] = process.argv.slice(2);
@@ -21,7 +22,8 @@ env.VITE_API_BASE = (env.VITE_API_BASE || "http://127.0.0.1:8787/api").replace(/
 
 writeManifestForPlatform(platform, env);
 
-const uniCli = resolve(appRoot, "node_modules", "@dcloudio", "vite-plugin-uni", "bin", "uni.js");
+const require = createRequire(import.meta.url);
+const uniCli = require.resolve("@dcloudio/vite-plugin-uni/bin/uni.js");
 const uniArgs = command === "dev" ? [uniCli, "-p", platform] : [uniCli, "build", "-p", platform];
 try {
   child = spawn(process.execPath, uniArgs, {
