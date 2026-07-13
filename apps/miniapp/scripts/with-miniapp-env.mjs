@@ -11,11 +11,11 @@ let restored = false;
 let child;
 
 const env = {
-  ...process.env,
   ...loadEnvFile(resolve(appRoot, ".env")),
   ...loadEnvFile(resolve(appRoot, ".env.local")),
   ...loadEnvFile(resolve(appRoot, ".env." + platform)),
-  ...loadEnvFile(resolve(appRoot, ".env." + platform + ".local"))
+  ...loadEnvFile(resolve(appRoot, ".env." + platform + ".local")),
+  ...process.env
 };
 
 env.VITE_API_BASE = (env.VITE_API_BASE || "http://127.0.0.1:8787/api").replace(/\/$/, "");

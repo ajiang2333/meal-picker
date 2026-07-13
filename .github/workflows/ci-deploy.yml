@@ -34,6 +34,8 @@ jobs:
         run: npm run api:build
 
       - name: Build H5
+        env:
+          VITE_API_BASE: /api
         run: npm --workspace apps/miniapp run build:h5
 
   deploy:
@@ -62,6 +64,8 @@ jobs:
         run: npm ci
 
       - name: Build release
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE || '/api' }}
         run: |
           npm run api:prisma:generate
           npm run api:build
@@ -69,17 +73,16 @@ jobs:
 
       - name: Create release archive
         run: |
-          tar \
-            --exclude=.git \
-            --exclude=.github \
-            --exclude=node_modules \
-            --exclude='*/node_modules' \
-            --exclude='*.log' \
-            --exclude='*.db' \
-            --exclude='*.db-*' \
-            --exclude='apps/api/.env' \
-            --exclude='apps/api/uploads' \
-            -czf "/tmp/waimai-picker-${GITHUB_SHA}.tar.gz" .
+          tar -czf "/tmp/waimai-picker-${GITHUB_SHA}.tar.gz" \
+            package.json \
+            package-lock.json \
+            apps/api/package.json \
+            apps/api/.env.production.example \
+            apps/api/dist \
+            apps/api/prisma \
+            apps/api/deploy \
+            apps/miniapp/package.json \
+            apps/miniapp/dist/build/h5
           du -h "/tmp/waimai-picker-${GITHUB_SHA}.tar.gz"
 
       - name: Configure SSH
@@ -118,8 +121,8 @@ jobs:
             -o ConnectTimeout=15 \
             -o ConnectionAttempts=1 \
             -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=15 \
-            -o ServerAliveCountMax=3 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             "/tmp/waimai-picker-${GITHUB_SHA}.tar.gz" \
             "apps/api/deploy/deploy-ubuntu.sh" \
             "${SERVER_USER}@${SERVER_HOST}:/tmp/"
@@ -135,8 +138,8 @@ jobs:
             -o ConnectTimeout=15 \
             -o ConnectionAttempts=1 \
             -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=15 \
-            -o ServerAliveCountMax=3 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             "${SERVER_USER}@${SERVER_HOST}" \
             "bash /tmp/deploy-ubuntu.sh /tmp/waimai-picker-${GITHUB_SHA}.tar.gz ${GITHUB_SHA}"
 

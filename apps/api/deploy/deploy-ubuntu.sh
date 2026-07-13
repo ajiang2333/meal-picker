@@ -35,6 +35,15 @@ if [ -n "$RELEASE_ARCHIVE" ]; then
   fi
 
   tar -xzf "$RELEASE_ARCHIVE" -C "$APP_DIR"
+
+  if [ ! -f "$APP_DIR/apps/api/dist/src/index.js" ]; then
+    echo "Prebuilt API entrypoint is missing from the release archive."
+    exit 1
+  fi
+  if [ ! -f "$APP_DIR/apps/miniapp/dist/build/h5/index.html" ]; then
+    echo "Prebuilt H5 entrypoint is missing from the release archive."
+    exit 1
+  fi
 fi
 
 cd "$APP_DIR"
@@ -48,8 +57,13 @@ fi
 
 npm run api:prisma:generate
 npm run api:db:deploy
-npm run api:build
-npm --workspace apps/miniapp run build:h5
+
+if [ -z "$RELEASE_ARCHIVE" ]; then
+  npm run api:build
+  npm --workspace apps/miniapp run build:h5
+else
+  echo "Using API and H5 artifacts built by GitHub Actions."
+fi
 
 if systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
   sudo -n systemctl restart "$SERVICE_NAME"
