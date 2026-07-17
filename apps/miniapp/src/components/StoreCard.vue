@@ -10,6 +10,7 @@
       <view class="subline">
         <text>{{ store.orderCount }} 单</text>
         <text>人均 ¥{{ store.avgPrice.toFixed(1) }}</text>
+        <text v-if="store.createdBy">创建：{{ store.createdBy.nickname }}</text>
       </view>
       <view class="subline">
         <text v-for="tag in store.tags.slice(0, 3)" :key="tag" class="plain-tag">{{ tag }}</text>

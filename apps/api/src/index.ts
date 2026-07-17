@@ -11,7 +11,7 @@ loadLocalEnv();
 
 const prisma = new PrismaClient();
 const app = express();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 const port = Number(process.env.PORT || 8787);
 const uploadsDir = resolve(process.cwd(), "uploads");
 const imageMimeExtensions: Record<string, string> = {
@@ -64,6 +64,23 @@ function mealTimeFromDate(date: Date) {
 function publicUploadUrl(req: express.Request, fileName: string) {
   const baseUrl = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
   return `${baseUrl}/uploads/${fileName}`;
+}
+function detectImageExtension(file: Express.Multer.File) {
+  const byMime = imageMimeExtensions[file.mimetype];
+  if (byMime) return byMime;
+
+  const byName = extname(file.originalname || "").toLowerCase();
+  if (Object.values(imageMimeExtensions).includes(byName)) return byName;
+
+  const buffer = file.buffer;
+  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return ".jpg";
+  if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return ".png";
+  if (buffer.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") return ".webp";
+  if (buffer.length >= 6) {
+    const header = buffer.toString("ascii", 0, 6);
+    if (header === "GIF87a" || header === "GIF89a") return ".gif";
+  }
+  return "";
 }
 
 async function currentUser(req: express.Request) {
@@ -224,46 +241,120 @@ function toRandomPickDto(pick: any) {
   };
 }
 
-async function upsertStore(data: any, userId: string) {
-  const tags = data.tags || [data.category, data.mealTime].filter(Boolean);
-  const mealTimes = data.mealTimes || [data.mealTime || mealTimeFromDate(new Date(data.orderTime || Date.now()))];
-  const store = await prisma.store.upsert({
-    where: { name: data.storeName },
-    update: {
-      category: data.category,
-      tags: toJsonText(tags),
-      mealTimes: toJsonText(mealTimes),
-      description: data.description,
-      coverUrl: data.coverUrl,
-      updatedById: userId
-    },
-    create: {
-      name: data.storeName,
-      category: data.category,
-      tags: toJsonText(tags),
-      mealTimes: toJsonText(mealTimes),
-      description: data.description || "由用户上传订单自动加入共建店铺库。",
-      coverUrl: data.coverUrl || covers[data.category] || covers["快餐"],
-      createdById: userId,
-      updatedById: userId
-    }
+const storeListInclude = {
+  createdBy: true,
+  updatedBy: true,
+  orders: true,
+  reviews: true,
+  dishes: { include: { reviews: true } }
+} as const;
+
+async function ensureStore(data: any, userId: string) {
+  const storeName = String(data.storeName || "").trim();
+  if (!storeName) throw new Error("store_name_required");
+
+  const existing = await prisma.store.findUnique({
+    where: { name: storeName },
+    include: storeListInclude
   });
-  await prisma.storeRevision.create({
-    data: {
-      storeId: store.id,
-      userId,
-      note: data.revisionNote || "上传订单时同步维护店铺库。",
-      snapshot: toJsonText({
-        name: store.name,
-        category: store.category,
-        tags,
-        mealTimes
-      })
+  if (existing) return { store: existing, created: false };
+
+  const category = data.category || "快餐";
+  const mealTime = data.mealTime || mealTimeFromDate(new Date(data.orderTime || Date.now()));
+  const tags = data.tags || [category, mealTime].filter(Boolean);
+  const mealTimes = data.mealTimes || [mealTime];
+
+  try {
+    const store = await prisma.store.create({
+      data: {
+        name: storeName,
+        category,
+        tags: toJsonText(tags),
+        mealTimes: toJsonText(mealTimes),
+        description: data.description || "由用户上传订单自动加入共建店铺库。",
+        coverUrl: data.coverUrl || covers[category] || covers["快餐"],
+        createdById: userId,
+        updatedById: userId
+      },
+      include: storeListInclude
+    });
+
+    await prisma.storeRevision.create({
+      data: {
+        storeId: store.id,
+        userId,
+        note: data.revisionNote || "上传订单时同步维护店铺库。",
+        snapshot: toJsonText({
+          name: store.name,
+          category: store.category,
+          tags,
+          mealTimes
+        })
+      }
+    });
+
+    return { store, created: true };
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      const store = await prisma.store.findUniqueOrThrow({
+        where: { name: storeName },
+        include: storeListInclude
+      });
+      return { store, created: false };
     }
-  });
-  return store;
+    throw error;
+  }
 }
 
+async function ensureDish(storeId: string, item: any) {
+  const name = String(item.name || "").trim();
+  if (!name) return { dish: null, created: false };
+
+  const existing = await prisma.dish.findUnique({
+    where: { storeId_name: { storeId, name } },
+    include: { reviews: true }
+  });
+  if (existing) return { dish: existing, created: false };
+
+  try {
+    const dish = await prisma.dish.create({
+      data: {
+        storeId,
+        name,
+        price: Number(item.price || 0),
+        coverUrl: item.coverUrl,
+        disliked: Boolean(item.disliked)
+      },
+      include: { reviews: true }
+    });
+    return { dish, created: true };
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      const dish = await prisma.dish.findUniqueOrThrow({
+        where: { storeId_name: { storeId, name } },
+        include: { reviews: true }
+      });
+      return { dish, created: false };
+    }
+    throw error;
+  }
+}
+async function markStoreMaintainedByDishUpload(storeId: string, userId: string, dishNames: string[]) {
+  if (!dishNames.length) return;
+  await prisma.store.update({
+    where: { id: storeId },
+    data: {
+      updatedById: userId,
+      revisions: {
+        create: {
+          userId,
+          note: "上传订单时新增菜品。",
+          snapshot: toJsonText({ createdDishes: dishNames })
+        }
+      }
+    }
+  });
+}
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
@@ -291,28 +382,27 @@ app.get("/api/stores", async (req, res) => {
   const keyword = String(req.query.keyword || "").trim();
   const category = String(req.query.category || "全部");
   const mealTime = String(req.query.mealTime || "全部");
+  const maintainedBy = String(req.query.maintainedBy || "").trim();
+  const maintainedUser = maintainedBy === "me" ? await currentUser(req) : undefined;
   const stores = await prisma.store.findMany({
     where: {
       AND: [
         category && category !== "全部" ? { category } : {},
+        maintainedUser ? { OR: [{ createdById: maintainedUser.id }, { updatedById: maintainedUser.id }] } : {},
         keyword
           ? {
               OR: [
                 { name: { contains: keyword } },
                 { category: { contains: keyword } },
-                { description: { contains: keyword } }
+                { description: { contains: keyword } },
+                { createdBy: { is: { nickname: { contains: keyword } } } },
+                { updatedBy: { is: { nickname: { contains: keyword } } } }
               ]
             }
           : {}
       ]
     },
-    include: {
-      createdBy: true,
-      updatedBy: true,
-      orders: true,
-      reviews: true,
-      dishes: { include: { reviews: true } }
-    },
+    include: storeListInclude,
     orderBy: { updatedAt: "desc" }
   });
   const storeDtos = stores
@@ -412,7 +502,7 @@ app.get("/api/orders", async (req, res) => {
 
 app.post("/api/orders", async (req, res) => {
   const user = await currentUser(req);
-  const store = await upsertStore(req.body, user.id);
+  const { store, created: storeCreated } = await ensureStore(req.body, user.id);
   const orderTime = new Date(req.body.orderTime || Date.now());
   const order = await prisma.order.create({
     data: {
@@ -430,23 +520,18 @@ app.post("/api/orders", async (req, res) => {
     }
   });
 
+  const createdDishes: DishDto[] = [];
   for (const item of req.body.dishes || []) {
-    const dish = await prisma.dish.upsert({
-      where: { storeId_name: { storeId: store.id, name: item.name } },
-      update: { price: Number(item.price || 0), coverUrl: item.coverUrl, disliked: Boolean(item.disliked) },
-      create: {
-        storeId: store.id,
-        name: item.name,
-        price: Number(item.price || 0),
-        coverUrl: item.coverUrl,
-        disliked: Boolean(item.disliked)
-      }
-    });
+    const itemName = String(item.name || "").trim();
+    if (!itemName) continue;
+    const { dish, created } = await ensureDish(store.id, { ...item, name: itemName });
+    if (!dish) continue;
+    if (created) createdDishes.push(toDishDto(dish, store.coverUrl));
     await prisma.orderItem.create({
       data: {
         orderId: order.id,
         dishId: dish.id,
-        nameSnapshot: item.name,
+        nameSnapshot: itemName,
         priceSnapshot: Number(item.price || 0),
         rating: item.rating,
         disliked: Boolean(item.disliked),
@@ -469,6 +554,8 @@ app.post("/api/orders", async (req, res) => {
     }
   }
 
+  if (!storeCreated && createdDishes.length) await markStoreMaintainedByDishUpload(store.id, user.id, createdDishes.map((dish) => dish.name));
+
   if (req.body.note || req.body.disliked) {
     await prisma.review.create({
       data: {
@@ -483,17 +570,28 @@ app.post("/api/orders", async (req, res) => {
     });
   }
 
-  res.status(201).json({ orderId: order.id, storeId: store.id });
+  res.status(201).json({
+    orderId: order.id,
+    storeId: store.id,
+    createdStore: storeCreated ? toStoreDto(store) : null,
+    createdDishes,
+    createdSummary: {
+      storeCreated,
+      dishCount: createdDishes.length,
+      dishNames: createdDishes.map((dish) => dish.name)
+    }
+  });
 });
-
 app.put("/api/orders/:id", async (req, res) => {
   const user = await currentUser(req);
   const order = await prisma.order.findFirst({ where: { id: req.params.id, userId: user.id } });
   if (!order) return res.status(404).json({ error: "order_not_found" });
 
-  const store = req.body.storeName ? await upsertStore(req.body, user.id) : undefined;
+  const storeResult = req.body.storeName ? await ensureStore(req.body, user.id) : undefined;
+  const store = storeResult?.store;
   const orderTime = req.body.orderTime ? new Date(req.body.orderTime) : undefined;
   const rating = req.body.rating === undefined ? undefined : Number(req.body.rating);
+  const createdDishes: DishDto[] = [];
 
   await prisma.order.update({
     where: { id: order.id },
@@ -516,22 +614,16 @@ app.put("/api/orders/:id", async (req, res) => {
     await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
 
     for (const item of req.body.dishes) {
-      const dish = await prisma.dish.upsert({
-        where: { storeId_name: { storeId, name: item.name } },
-        update: { price: Number(item.price || 0), coverUrl: item.coverUrl, disliked: Boolean(item.disliked) },
-        create: {
-          storeId,
-          name: item.name,
-          price: Number(item.price || 0),
-          coverUrl: item.coverUrl,
-          disliked: Boolean(item.disliked)
-        }
-      });
+      const itemName = String(item.name || "").trim();
+      if (!itemName) continue;
+      const { dish, created } = await ensureDish(storeId, { ...item, name: itemName });
+      if (!dish) continue;
+      if (created) createdDishes.push(toDishDto(dish, store?.coverUrl));
       await prisma.orderItem.create({
         data: {
           orderId: order.id,
           dishId: dish.id,
-          nameSnapshot: item.name,
+          nameSnapshot: itemName,
           priceSnapshot: Number(item.price || 0),
           rating: item.rating,
           disliked: Boolean(item.disliked),
@@ -569,17 +661,27 @@ app.put("/api/orders/:id", async (req, res) => {
     }
   }
 
+  if (!storeResult?.created && createdDishes.length) await markStoreMaintainedByDishUpload(store?.id || order.storeId, user.id, createdDishes.map((dish) => dish.name));
+
   const updated = await prisma.order.findUnique({
     where: { id: order.id },
     include: {
       user: true,
-      store: { include: { createdBy: true, updatedBy: true, orders: true, reviews: true, dishes: { include: { reviews: true } } } },
+      store: { include: storeListInclude },
       items: true
     }
   });
-  res.json({ order: toOrderDto(updated) });
+  res.json({
+    order: toOrderDto(updated),
+    createdStore: storeResult?.created && store ? toStoreDto(store) : null,
+    createdDishes,
+    createdSummary: {
+      storeCreated: Boolean(storeResult?.created),
+      dishCount: createdDishes.length,
+      dishNames: createdDishes.map((dish) => dish.name)
+    }
+  });
 });
-
 app.delete("/api/orders/:id", async (req, res) => {
   const user = await currentUser(req);
   const order = await prisma.order.findFirst({ where: { id: req.params.id, userId: user.id } });
@@ -706,7 +808,7 @@ app.get("/api/stats", async (_req, res) => {
 
 app.post("/api/uploads/images", upload.single("image"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "image_required" });
-  const extension = imageMimeExtensions[req.file.mimetype] || extname(req.file.originalname).toLowerCase();
+  const extension = detectImageExtension(req.file);
   if (!extension || !Object.values(imageMimeExtensions).includes(extension)) {
     return res.status(400).json({ error: "unsupported_image_type" });
   }
@@ -724,6 +826,12 @@ app.post("/api/ocr/extract", upload.single("image"), async (_req, res) => {
   });
 });
 
+app.use((error: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (error?.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ error: "image_too_large", maxSizeMb: 12 });
+  }
+  next(error);
+});
 app.listen(port, () => {
   console.log(`Waimai Picker API listening on http://127.0.0.1:${port}`);
 });

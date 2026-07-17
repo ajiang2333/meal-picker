@@ -1,7 +1,8 @@
-import type { OrderItemInput } from "@/types";
+import type { OrderCreateResult, OrderItemInput } from "@/types";
 
-// API 地址通过 VITE_API_BASE 配置；未配置时使用本地后端。
+// API address comes from apps/miniapp/.env.local in local preview.
 const API_BASE = (import.meta.env.VITE_API_BASE || "http://127.0.0.1:8787/api").replace(/\/$/, "");
+const USE_MOCK_FALLBACK = import.meta.env.VITE_USE_MOCK === "true";
 
 const mockUsers = [
   { id: "mock-user-1", nickname: "春野小满", avatarColor: "#ffb8d0" },
@@ -230,19 +231,77 @@ export function request<T>(url: string, options: RequestOptions = {}) {
         if (statusCode >= 200 && statusCode < 300) {
           resolve(response.data as T);
         } else {
-          const fallback = mockRequest<T>(url, options);
+          const fallback = USE_MOCK_FALLBACK ? mockRequest<T>(url, options) : undefined;
           fallback ? resolve(fallback) : reject(response.data);
         }
       },
       fail: (error) => {
-        const fallback = mockRequest<T>(url, options);
+        const fallback = USE_MOCK_FALLBACK ? mockRequest<T>(url, options) : undefined;
         fallback ? resolve(fallback) : reject(error);
       }
     });
   });
 }
 
-export function uploadImage(filePath: string) {
+function parseUploadResponse(data: unknown) {
+  if (typeof data !== "string") return data;
+  try {
+    return JSON.parse(data);
+  } catch {
+    return data;
+  }
+}
+
+function createUploadError(statusCode: number | undefined, data: unknown, fallback: string) {
+  const payload = parseUploadResponse(data) as { error?: string; message?: string; maxSizeMb?: number } | string;
+  let message = fallback;
+  if (typeof payload === "object" && payload?.error === "image_too_large") message = "图片太大，请压缩到 " + (payload.maxSizeMb || 12) + "MB 内";
+  else if (typeof payload === "object" && payload?.error === "unsupported_image_type") message = "图片格式不支持";
+  else if (typeof payload === "object" && payload?.error === "image_required") message = "没有选到图片";
+  else if (statusCode === 413) message = "图片太大，请压缩后再上传";
+  else if (statusCode && statusCode >= 500) message = "服务器保存图片失败";
+  else if (typeof payload === "object" && payload?.message) message = payload.message;
+
+  const error = new Error(message) as Error & { statusCode?: number; data?: unknown };
+  error.statusCode = statusCode;
+  error.data = payload;
+  return error;
+}
+function imageFileNameFromType(type?: string) {
+  if (type === "image/png") return "upload.png";
+  if (type === "image/webp") return "upload.webp";
+  if (type === "image/gif") return "upload.gif";
+  return "upload.jpg";
+}
+
+function isBlobLike(value: unknown): value is Blob {
+  const BlobCtor = (globalThis as unknown as { Blob?: typeof Blob }).Blob;
+  return Boolean(BlobCtor && value instanceof BlobCtor);
+}
+
+function canUseFetchUpload(filePath: string, file?: unknown) {
+  return typeof fetch === "function" && typeof FormData === "function" && (isBlobLike(file) || filePath.startsWith("blob:"));
+}
+
+async function uploadImageWithFetch(filePath: string, file?: unknown) {
+  const blob = isBlobLike(file) ? file : await fetch(filePath).then((response) => response.blob());
+  const formData = new FormData();
+  formData.append("image", blob, imageFileNameFromType(blob.type));
+  const response = await fetch(`${API_BASE}/uploads/images`, {
+    method: "POST",
+    headers: {
+      "x-user-id": uni.getStorageSync("currentUserId") || ""
+    },
+    body: formData
+  });
+  const responseText = await response.text();
+  const data = parseUploadResponse(responseText) as { url?: string };
+  if (response.ok && data?.url) return data as { url: string };
+  throw createUploadError(response.status, data, "上传失败，图片未保存");
+}
+
+export function uploadImage(filePath: string, file?: unknown) {
+  if (canUseFetchUpload(filePath, file)) return uploadImageWithFetch(filePath, file);
   return new Promise<{ url: string }>((resolve, reject) => {
     uni.uploadFile({
       url: `${API_BASE}/uploads/images`,
@@ -253,19 +312,15 @@ export function uploadImage(filePath: string) {
       },
       success: (response) => {
         const statusCode = response.statusCode || 0;
+        const data = parseUploadResponse(response.data) as { url?: string };
         if (statusCode >= 200 && statusCode < 300) {
-          try {
-            const data = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
-            if (data?.url) resolve(data as { url: string });
-            else reject(new Error("Upload response missing url"));
-          } catch (error) {
-            reject(error);
-          }
+          if (data?.url) resolve(data as { url: string });
+          else reject(createUploadError(statusCode, data, "服务器未返回图片地址"));
         } else {
-          reject(response.data);
+          reject(createUploadError(statusCode, data, "上传失败，图片未保存"));
         }
       },
-      fail: reject
+      fail: (error) => reject(createUploadError(undefined, error, "无法连接图片上传服务"))
     });
   });
 }
@@ -433,24 +488,26 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
     const rating = Number(payload.rating || 4);
     const dishes = (payload.dishes || []).map((dish) => ({
       ...dish,
-      name: dish.name || "未命名菜品",
+      name: (dish.name || "未命名菜品").trim(),
       price: Number(dish.price || 0),
       rating: Number(dish.rating || rating),
       disliked: Boolean(dish.disliked)
-    }));
+    })).filter((dish) => dish.name);
     const total = Number(payload.total || dishes.reduce((sum, dish) => sum + Number(dish.price || 0), 0));
-    let store = mockStores.find((item) => item.name === payload.storeName);
+    const storeName = (payload.storeName || "未命名店铺").trim();
+    let store = mockStores.find((item) => item.name === storeName);
+    const storeCreated = !store;
     if (!store) {
       store = {
         id: `mock-store-upload-${Date.now()}`,
-        name: payload.storeName || "未命名店铺",
+        name: storeName,
         category,
         tags: [category, mealTime, "Uploaded"],
         mealTimes: [mealTime],
         rating,
         avgPrice: total || Number(dishes[0]?.price || 0),
         orderCount: 0,
-        description: payload.note || "由上传订单同步生成的店铺。",
+        description: payload.note || "由上传订单自动加入店铺库。",
         coverUrl: "https://images.unsplash.com/photo-1543353071-873f17a7a088?auto=format&fit=crop&w=700&q=80",
         createdBy: mockUsers[0],
         updatedBy: mockUsers[0]
@@ -459,30 +516,24 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
     }
 
     const previousCount = store.orderCount || 0;
-    store.category = category;
-    store.tags = Array.from(new Set([...store.tags, category, mealTime]));
-    store.mealTimes = Array.from(new Set([...store.mealTimes, mealTime]));
     store.rating = Number(((store.rating * previousCount + rating) / (previousCount + 1)).toFixed(1));
     store.avgPrice = Number(((store.avgPrice * previousCount + (total || store.avgPrice)) / (previousCount + 1)).toFixed(1));
     store.orderCount = previousCount + 1;
-    store.updatedBy = mockUsers[0];
 
+    const createdDishes: Array<typeof mockDishes[number]> = [];
     dishes.forEach((dish, index) => {
-      const existing = mockDishes.find((item) => item.storeId === store.id && item.name === dish.name);
-      if (existing) {
-        existing.price = dish.price;
-        existing.rating = dish.rating || rating;
-        existing.disliked = Boolean(dish.disliked);
-      } else {
-        mockDishes.unshift({
-          id: `mock-dish-upload-${Date.now()}-${index}`,
-          storeId: store.id,
-          name: dish.name,
-          price: dish.price,
-          rating: dish.rating || rating,
-          disliked: Boolean(dish.disliked)
-        });
-      }
+      const existing = mockDishes.find((item) => item.storeId === store!.id && item.name === dish.name);
+      if (existing) return;
+      const createdDish = {
+        id: `mock-dish-upload-${Date.now()}-${index}`,
+        storeId: store!.id,
+        name: dish.name,
+        price: dish.price,
+        rating: dish.rating || rating,
+        disliked: Boolean(dish.disliked)
+      };
+      mockDishes.unshift(createdDish);
+      createdDishes.push(createdDish);
     });
 
     const order = {
@@ -512,9 +563,18 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
         orderId: order.id
       }, ...mockReviews];
     }
-    return { order } as T;
+    return {
+      orderId: order.id,
+      storeId: store.id,
+      createdStore: storeCreated ? store : null,
+      createdDishes,
+      createdSummary: {
+        storeCreated,
+        dishCount: createdDishes.length,
+        dishNames: createdDishes.map((dish) => dish.name)
+      }
+    } as T;
   }
-
   if (method !== "GET") return undefined;
 
   if (path === "/users") return { users: mockUsers } as T;
@@ -588,12 +648,13 @@ function filterStores(query: Record<string, string>) {
   const keyword = query.keyword || "";
   const category = query.category || "全部";
   const mealTime = query.mealTime || "全部";
+  const maintainedBy = query.maintainedBy || "";
   return mockStores
     .filter((store) => category === "全部" || store.category === category)
     .filter((store) => mealTime === "全部" || store.mealTimes.includes(mealTime))
-    .filter((store) => !keyword || `${store.name}${store.category}${store.description}`.includes(keyword));
+    .filter((store) => maintainedBy !== "me" || store.createdBy?.id === mockUsers[0].id || store.updatedBy?.id === mockUsers[0].id)
+    .filter((store) => !keyword || `${store.name}${store.category}${store.description}${store.createdBy?.nickname || ""}${store.updatedBy?.nickname || ""}`.includes(keyword));
 }
-
 function parseUrl(url: string) {
   const [path, search = ""] = url.split("?");
   const query: Record<string, string> = {};
@@ -639,7 +700,7 @@ export const api = {
     disliked: boolean;
     note?: string;
     dishes: OrderItemInput[];
-  }) => request("/orders", { method: "POST", data }),
+  }) => request<OrderCreateResult>("/orders", { method: "POST", data }),
   updateOrder: (id: string, data: unknown) => request(`/orders/${id}`, { method: "PUT", data }),
   deleteOrder: (id: string) => request(`/orders/${id}`, { method: "DELETE" }),
   reviews: () => request("/reviews"),

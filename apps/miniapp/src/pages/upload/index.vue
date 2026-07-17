@@ -222,7 +222,7 @@
 import { onShow, onTabItemTap } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
 import { api } from "@/api/client";
-import type { Order } from "@/types";
+import type { Order, OrderCreateResult } from "@/types";
 
 type DishForm = {
   name: string;
@@ -506,23 +506,38 @@ function buildPayload() {
   };
 }
 
+function orderCreateToast(result: OrderCreateResult) {
+  const storeCreated = Boolean(result.createdSummary?.storeCreated || result.createdStore);
+  const dishCount = result.createdSummary?.dishCount ?? result.createdDishes?.length ?? 0;
+  if (storeCreated && dishCount > 0) return "新增店铺和" + dishCount + "个菜品";
+  if (storeCreated) return "新增店铺";
+  if (dishCount > 0) return "新增" + dishCount + "个菜品";
+  return "已保存订单";
+}
+function createdCatalogItems(result: OrderCreateResult) {
+  const dishCount = result.createdSummary?.dishCount ?? result.createdDishes?.length ?? 0;
+  return Boolean(result.createdSummary?.storeCreated || result.createdStore || dishCount > 0);
+}
 async function save() {
   const payload = buildPayload();
   if (!payload.storeName) {
     uni.showToast({ title: "请填写店铺名称", icon: "none" });
     return;
   }
+  let targetTab = "orders";
   if (editingOrderId.value) {
-    await api.updateOrder(editingOrderId.value, payload);
+    const result = await api.updateOrder(editingOrderId.value, payload) as OrderCreateResult;
     uni.removeStorageSync("editingOrderId");
     editingOrderId.value = "";
-    uni.showToast({ title: "已更新" });
+    uni.showToast({ title: orderCreateToast(result) || "已更新" });
+    if (createdCatalogItems(result)) targetTab = "stores";
   } else {
-    await api.createOrder(payload);
-    uni.showToast({ title: "已保存" });
+    const result = await api.createOrder(payload);
+    uni.showToast({ title: orderCreateToast(result) });
+    if (createdCatalogItems(result)) targetTab = "stores";
   }
   resetForm();
-  uni.setStorageSync("openMyTab", "orders");
+  uni.setStorageSync("openMyTab", targetTab);
   uni.switchTab({ url: "/pages/me/index" });
 }
 onShow(syncEditingOrder);

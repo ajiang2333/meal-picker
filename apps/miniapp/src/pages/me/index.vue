@@ -165,7 +165,40 @@
       <u-list-item v-for="store in visibleStores" :key="store.id">
         <view class="card list-card clickable-card" @tap="openStore(store.id)">
           <view class="row"><text class="strong">{{ store.name }}</text><text class="score">{{ store.rating.toFixed(1) }}分</text></view>
-          <text class="muted">{{ store.category }} · {{ store.orderCount }} 单 · 点击编辑资料</text>
+          <view class="store-summary-row">
+            <view class="store-summary-pill">{{ store.category }}</view>
+            <view class="store-summary-pill">{{ store.orderCount }} 单</view>
+            <view class="store-summary-pill accent">点击编辑资料</view>
+          </view>
+          <view class="store-collab-panel">
+            <view class="store-collab-head">
+              <view>
+                <text class="collab-kicker">资料协作</text>
+                <text class="collab-title">创建人与维护人</text>
+              </view>
+              <text class="collab-state">{{ store.updatedBy ? "已维护" : "待维护" }}</text>
+            </view>
+            <view class="store-collab-grid">
+              <view class="collab-person creator">
+                <view class="collab-avatar" :style="{ background: store.createdBy?.avatarColor || '#ffb8d0' }">
+                  {{ store.createdBy?.nickname?.slice(0, 1) || "系" }}
+                </view>
+                <view class="collab-info">
+                  <text class="collab-label">创建人</text>
+                  <text class="collab-name">{{ store.createdBy?.nickname || "系统导入" }}</text>
+                </view>
+              </view>
+              <view :class="['collab-person', 'maintainer', { empty: !store.updatedBy }]">
+                <view class="collab-avatar" :style="{ background: store.updatedBy?.avatarColor || '#8ee6b8' }">
+                  {{ store.updatedBy?.nickname?.slice(0, 1) || "待" }}
+                </view>
+                <view class="collab-info">
+                  <text class="collab-label">维护人</text>
+                  <text class="collab-name">{{ store.updatedBy?.nickname || "暂无维护人" }}</text>
+                </view>
+              </view>
+            </view>
+          </view>
         </view>
       </u-list-item>
     </u-list>
@@ -224,7 +257,7 @@ const tabTitle = computed(() => {
 });
 const visibleOrders = computed(() => orders.value);
 const visibleReviews = computed(() => reviews.value);
-const maintainedStores = computed(() => stores.value.filter((store) => store.createdBy?.id === session.userId || store.updatedBy?.id === session.userId));
+const maintainedStores = computed(() => stores.value);
 const visibleStores = computed(() => maintainedStores.value);
 const totalSpent = computed(() => orders.value.reduce((sum, order) => sum + Number(order.total || 0), 0));
 
@@ -278,7 +311,7 @@ async function load() {
     }
     orders.value = ((await api.orders()) as { orders: Order[] }).orders;
     reviews.value = ((await api.reviews()) as { reviews: Review[] }).reviews;
-    stores.value = ((await api.stores()) as { stores: Store[] }).stores;
+    stores.value = ((await api.stores("?maintainedBy=me")) as { stores: Store[] }).stores;
     const randomResult = await api.randomPicks("?take=0&skip=0") as { records: RandomPick[]; total: number };
     randomTotal.value = randomResult.total;
     const statResult = await api.stats() as typeof charts;
@@ -588,6 +621,167 @@ onShow(async () => {
   line-height: 1.55;
 }
 
+.store-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin: 8rpx 0 14rpx;
+}
+
+.store-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40rpx;
+  border-radius: 999rpx;
+  background: #eefcf4;
+  padding: 0 14rpx;
+  color: #4f7b67;
+  font-size: 22rpx;
+  font-weight: 900;
+}
+
+.store-summary-pill.accent {
+  background: #fff1f7;
+  color: #d86693;
+}
+
+.store-collab-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1rpx solid rgba(172, 225, 196, 0.82);
+  border-radius: 24rpx;
+  background:
+    radial-gradient(circle at 12% 6%, rgba(255, 228, 239, 0.82), transparent 130rpx),
+    radial-gradient(circle at 92% 88%, rgba(226, 251, 233, 0.9), transparent 150rpx),
+    rgba(255, 255, 255, 0.72);
+  padding: 18rpx;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.82);
+}
+
+.store-collab-panel::before {
+  content: "";
+  position: absolute;
+  top: -30rpx;
+  right: -20rpx;
+  width: 118rpx;
+  height: 118rpx;
+  border-radius: 50%;
+  background: rgba(255, 184, 208, 0.22);
+}
+
+.store-collab-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.collab-kicker,
+.collab-title,
+.collab-label,
+.collab-name,
+.collab-state {
+  display: block;
+}
+
+.collab-kicker {
+  color: #d86693;
+  font-size: 20rpx;
+  font-weight: 950;
+  letter-spacing: 1rpx;
+}
+
+.collab-title {
+  margin-top: 4rpx;
+  color: #24352d;
+  font-size: 26rpx;
+  font-weight: 950;
+}
+
+.collab-state {
+  flex-shrink: 0;
+  border: 1rpx solid rgba(216, 102, 147, 0.18);
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 8rpx 14rpx;
+  color: #d86693;
+  font-size: 21rpx;
+  font-weight: 950;
+}
+
+.store-collab-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.collab-person {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12rpx;
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 14rpx 12rpx;
+  box-shadow: 0 10rpx 22rpx rgba(95, 159, 124, 0.07);
+}
+
+.collab-person.creator {
+  border: 1rpx solid rgba(255, 184, 208, 0.72);
+}
+
+.collab-person.maintainer {
+  border: 1rpx solid rgba(142, 230, 184, 0.84);
+}
+
+.collab-person.empty {
+  background: rgba(255, 255, 255, 0.6);
+  opacity: 0.86;
+}
+
+.collab-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 18rpx;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 950;
+  box-shadow: 0 10rpx 18rpx rgba(216, 102, 147, 0.14);
+}
+
+.collab-info {
+  display: grid;
+  min-width: 0;
+  gap: 3rpx;
+}
+
+.collab-label {
+  color: #8d7281;
+  font-size: 20rpx;
+  font-weight: 900;
+}
+
+.collab-name {
+  overflow: hidden;
+  color: #24352d;
+  font-size: 25rpx;
+  font-weight: 950;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collab-person.empty .collab-name {
+  color: #7e978b;
+}
 .review-card-head {
   display: flex;
   align-items: flex-start;

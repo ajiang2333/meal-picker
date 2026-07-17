@@ -71,6 +71,11 @@ onLoad(async (query) => {
   reviews.value = result.reviews;
 });
 
+function imageUploadErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error && "error" in error) return String((error as { error?: string }).error || "上传失败，图片未保存");
+  return "上传失败，图片未保存";
+}
 function chooseDishImage() {
   if (!dish.value) return;
   uni.chooseImage({
@@ -79,18 +84,20 @@ function chooseDishImage() {
     sourceType: ["album", "camera"],
     success: async (result) => {
       const localUrl = ((result.tempFilePaths || []) as string[])[0] || "";
+      const selectedFile = (((result.tempFiles || []) as Array<{ file?: unknown }>)[0] || {}).file;
       if (!localUrl || !dish.value) return;
       const previousCover = dish.value.coverUrl || "";
       dishCover.value = localUrl;
       try {
-        const uploaded = await api.uploadImage(localUrl) as { url: string };
+        const uploaded = await api.uploadImage(localUrl, selectedFile) as { url: string };
         await api.updateDish(dish.value.id, { coverUrl: uploaded.url });
         dishCover.value = uploaded.url;
         dish.value = { ...dish.value, coverUrl: uploaded.url };
         uni.showToast({ title: "菜品图片已更新", icon: "none" });
       } catch (error) {
         dishCover.value = previousCover;
-        uni.showToast({ title: "上传失败，图片未保存", icon: "none" });
+        console.error("dish cover upload failed", error);
+        uni.showToast({ title: imageUploadErrorMessage(error), icon: "none" });
       }
     }
   });

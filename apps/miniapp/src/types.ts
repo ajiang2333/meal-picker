@@ -52,6 +52,17 @@ export type Order = {
   dishes: OrderItemInput[];
 };
 
+export type OrderCreateResult = {
+  orderId: string;
+  storeId: string;
+  createdStore?: Store | null;
+  createdDishes: Dish[];
+  createdSummary?: {
+    storeCreated: boolean;
+    dishCount: number;
+    dishNames: string[];
+  };
+};
 export type Review = {
   id: string;
   user: User;

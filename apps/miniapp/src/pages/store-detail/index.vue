@@ -237,6 +237,11 @@ function handleCoverError() {
   coverError.value = true;
 }
 
+function imageUploadErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error && "error" in error) return String((error as { error?: string }).error || "上传失败，图片未保存");
+  return "上传失败，图片未保存";
+}
 function chooseStoreCover() {
   if (!store.value) return;
   uni.chooseImage({
@@ -245,13 +250,14 @@ function chooseStoreCover() {
     sourceType: ["album", "camera"],
     success: async (result) => {
       const localUrl = ((result.tempFilePaths || []) as string[])[0] || "";
+      const selectedFile = (((result.tempFiles || []) as Array<{ file?: unknown }>)[0] || {}).file;
       if (!localUrl || !store.value) return;
       const previousCover = store.value.coverUrl || "";
       coverLoaded.value = false;
       coverError.value = false;
       localCover.value = localUrl;
       try {
-        const uploaded = await api.uploadImage(localUrl) as { url: string };
+        const uploaded = await api.uploadImage(localUrl, selectedFile) as { url: string };
         await api.updateStore(store.value.id, { coverUrl: uploaded.url });
         localCover.value = "";
         store.value = { ...store.value, coverUrl: uploaded.url };
@@ -261,7 +267,8 @@ function chooseStoreCover() {
         store.value = { ...store.value, coverUrl: previousCover };
         coverLoaded.value = false;
         coverError.value = false;
-        uni.showToast({ title: "上传失败，图片未保存", icon: "none" });
+        console.error("store cover upload failed", error);
+        uni.showToast({ title: imageUploadErrorMessage(error), icon: "none" });
       }
     }
   });
