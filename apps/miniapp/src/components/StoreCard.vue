@@ -21,14 +21,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Store } from "@/types";
-import { getCustomStoreCover } from "@/utils/customImages";
 
 const props = defineProps<{
   store: Store;
 }>();
 
 const defaultCover = "https://images.unsplash.com/photo-1543353071-873f17a7a088?auto=format&fit=crop&w=500&q=80";
-const coverSrc = computed(() => getCustomStoreCover(props.store.id) || props.store.coverUrl || defaultCover);
+const coverSrc = computed(() => props.store.coverUrl || defaultCover);
 
 function openDetail() {
   uni.navigateTo({ url: `/pages/store-detail/index?id=${props.store.id}` });

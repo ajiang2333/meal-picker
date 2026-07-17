@@ -58,7 +58,6 @@ import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import { api } from "@/api/client";
 import UserBadge from "@/components/UserBadge.vue";
-import { getCustomDishCover, setCustomDishCover } from "@/utils/customImages";
 import type { Dish, Review } from "@/types";
 
 const dish = ref<Dish | null>(null);
@@ -68,7 +67,7 @@ const dishCover = ref("");
 onLoad(async (query) => {
   const result = await api.dish(String(query?.id || "")) as { dish: Dish; reviews: Review[] };
   dish.value = result.dish;
-  dishCover.value = getCustomDishCover(result.dish.id) || result.dish.coverUrl || "";
+  dishCover.value = result.dish.coverUrl || "";
   reviews.value = result.reviews;
 });
 
@@ -81,17 +80,17 @@ function chooseDishImage() {
     success: async (result) => {
       const localUrl = ((result.tempFilePaths || []) as string[])[0] || "";
       if (!localUrl || !dish.value) return;
+      const previousCover = dish.value.coverUrl || "";
       dishCover.value = localUrl;
-      setCustomDishCover(dish.value.id, localUrl);
       try {
         const uploaded = await api.uploadImage(localUrl) as { url: string };
+        await api.updateDish(dish.value.id, { coverUrl: uploaded.url });
         dishCover.value = uploaded.url;
         dish.value = { ...dish.value, coverUrl: uploaded.url };
-        setCustomDishCover(dish.value.id, uploaded.url);
-        await api.updateDish(dish.value.id, { coverUrl: uploaded.url });
         uni.showToast({ title: "菜品图片已更新", icon: "none" });
       } catch (error) {
-        uni.showToast({ title: "已在本机保存", icon: "none" });
+        dishCover.value = previousCover;
+        uni.showToast({ title: "上传失败，图片未保存", icon: "none" });
       }
     }
   });

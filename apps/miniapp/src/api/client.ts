@@ -254,8 +254,13 @@ export function uploadImage(filePath: string) {
       success: (response) => {
         const statusCode = response.statusCode || 0;
         if (statusCode >= 200 && statusCode < 300) {
-          const data = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
-          resolve(data as { url: string });
+          try {
+            const data = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+            if (data?.url) resolve(data as { url: string });
+            else reject(new Error("Upload response missing url"));
+          } catch (error) {
+            reject(error);
+          }
         } else {
           reject(response.data);
         }

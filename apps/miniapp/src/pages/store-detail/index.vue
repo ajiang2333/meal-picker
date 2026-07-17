@@ -168,7 +168,6 @@ import { onLoad } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
 import { api } from "@/api/client";
 import UserBadge from "@/components/UserBadge.vue";
-import { getCustomStoreCover, setCustomStoreCover } from "@/utils/customImages";
 import type { Dish, Review, Store } from "@/types";
 
 const id = ref("");
@@ -204,7 +203,7 @@ async function load() {
   try {
     const result = await api.store(id.value) as { store: Store; dishes: Dish[]; reviews: Review[] };
     store.value = result.store;
-    localCover.value = getCustomStoreCover(result.store.id);
+    localCover.value = "";
     dishes.value = result.dishes;
     reviews.value = result.reviews;
     Object.assign(editForm, {
@@ -247,20 +246,22 @@ function chooseStoreCover() {
     success: async (result) => {
       const localUrl = ((result.tempFilePaths || []) as string[])[0] || "";
       if (!localUrl || !store.value) return;
+      const previousCover = store.value.coverUrl || "";
       coverLoaded.value = false;
       coverError.value = false;
       localCover.value = localUrl;
-      store.value = { ...store.value, coverUrl: localUrl };
-      setCustomStoreCover(store.value.id, localUrl);
       try {
         const uploaded = await api.uploadImage(localUrl) as { url: string };
-        localCover.value = uploaded.url;
-        store.value = { ...store.value, coverUrl: uploaded.url };
-        setCustomStoreCover(store.value.id, uploaded.url);
         await api.updateStore(store.value.id, { coverUrl: uploaded.url });
+        localCover.value = "";
+        store.value = { ...store.value, coverUrl: uploaded.url };
         uni.showToast({ title: "店铺图片已更新", icon: "none" });
       } catch (error) {
-        uni.showToast({ title: "已在本机保存", icon: "none" });
+        localCover.value = "";
+        store.value = { ...store.value, coverUrl: previousCover };
+        coverLoaded.value = false;
+        coverError.value = false;
+        uni.showToast({ title: "上传失败，图片未保存", icon: "none" });
       }
     }
   });
@@ -289,7 +290,6 @@ async function save() {
       mealTimes: editForm.mealTimesText.split(/[，,、\s]+/).map((item) => item.trim()).filter(Boolean),
       description: editForm.description.trim(),
       note: editForm.note.trim(),
-      coverUrl: coverSrc.value
     });
     editing.value = false;
     uni.showToast({ title: "已更新店铺" });

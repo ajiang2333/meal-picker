@@ -34,13 +34,14 @@
         :max-count="1"
         accept="image"
         upload-text="上传截图"
+        upload-icon-color="#d86693"
         width="220"
         height="220"
         :preview-full-image="true"
         @afterRead="handleAfterRead"
         @delete="removeUpload"
       />
-      <u-textarea
+      <u-textarea :placeholder-style="fieldPlaceholderStyle"
         v-model="rawText"
         class="soft-control text-area"
         placeholder="粘贴订单文字：先写店铺名，菜品可用换行、分号、竖线或逗号分隔"
@@ -70,27 +71,27 @@
         </view>
       </view>
 
-      <u-form :model="form" label-position="top" label-width="100%">
+      <u-form :model="form" label-position="top" label-width="100%" :label-style="formLabelStyle">
         <u-form-item label="店铺名称">
-          <u-input v-model="form.storeName" border="none" clearable placeholder="例如：春日便当研究所" />
+          <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="form.storeName" border="none" clearable placeholder="例如：春日便当研究所" />
         </u-form-item>
 
         <view class="form-grid">
           <u-form-item label="外卖种类">
-            <u-cell class="picker-cell" :title="form.category" :border="false" is-link @click="picker.category = true" />
+            <u-cell class="picker-cell" :title="form.category" :title-style="pickerTitleStyle" :border="false" is-link @click="picker.category = true" />
           </u-form-item>
           <u-form-item label="用餐时间">
-            <u-cell class="picker-cell" :title="form.mealTime" :border="false" is-link @click="picker.mealTime = true" />
+            <u-cell class="picker-cell" :title="form.mealTime" :title-style="pickerTitleStyle" :border="false" is-link @click="picker.mealTime = true" />
           </u-form-item>
         </view>
 
         <u-form-item label="订单时间">
-          <u-cell class="time-cell" :title="orderTimeText" :border="false" is-link @click="picker.orderTime = true" />
+          <u-cell class="time-cell" :title="orderTimeText" :title-style="pickerTitleStyle" :border="false" is-link @click="picker.orderTime = true" />
         </u-form-item>
 
         <view class="form-grid">
           <u-form-item label="实付金额">
-            <u-input v-model="form.total" border="none" type="digit" prefix-icon="rmb-circle" placeholder="0.00" />
+            <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="form.total" border="none" type="digit" prefix-icon="rmb-circle" placeholder="0.00" />
           </u-form-item>
           <u-form-item label="订单评分">
             <view class="rate-field">
@@ -108,7 +109,7 @@
         </u-form-item>
 
         <u-form-item label="订单评价">
-          <u-textarea v-model="form.note" border="none" height="120" placeholder="这单有什么值得记住的？" maxlength="240" count />
+          <u-textarea :placeholder-style="fieldPlaceholderStyle" v-model="form.note" border="none" height="120" placeholder="这单有什么值得记住的？" maxlength="240" count />
         </u-form-item>
       </u-form>
     </view>
@@ -147,11 +148,11 @@
         <view class="dish-grid">
           <view class="dish-form-item">
             <text class="dish-form-label">菜品名称</text>
-            <u-input v-model="dish.name" border="none" clearable placeholder="菜品名" />
+            <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="dish.name" border="none" clearable placeholder="菜品名" />
           </view>
           <view class="dish-form-item">
             <text class="dish-form-label">菜品价格</text>
-            <u-input v-model="dish.price" border="none" type="digit" placeholder="价格" />
+            <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="dish.price" border="none" type="digit" placeholder="价格" />
           </view>
           <view class="dish-form-item">
             <text class="dish-form-label">菜品评分</text>
@@ -248,6 +249,21 @@ const mealTimeColumns = [mealTimes];
 
 const image = ref("");
 const rawText = ref("");
+const fieldTextColor = "#24352d";
+const fieldPlaceholderStyle = "color: #8d7281; -webkit-text-fill-color: #8d7281; opacity: 1;";
+const formLabelStyle = {
+  color: "#4b3544",
+  fontSize: "25rpx",
+  fontWeight: 900,
+  WebkitTextFillColor: "#4b3544",
+  opacity: 1
+};
+const pickerTitleStyle = {
+  color: fieldTextColor,
+  fontWeight: 900,
+  WebkitTextFillColor: fieldTextColor,
+  opacity: 1
+};
 const uploadFiles = ref<UploadFile[]>([]);
 const orderTimeValue = ref(Date.now());
 const picker = reactive({ category: false, mealTime: false, orderTime: false });
@@ -841,6 +857,58 @@ onTabItemTap(resetUploadTab);
   height: 92rpx !important;
   min-height: 92rpx;
   line-height: 92rpx !important;
+}
+
+.upload-page :deep(.u-form-item__body__left),
+.upload-page :deep(.u-form-item__body__left__content),
+.upload-page :deep(.u-form-item__body__left__content__label),
+.upload-page :deep(.u-form-item__body__left text),
+.upload-page :deep(.u-form-item__body__left uni-text) {
+  color: #4b3544 !important;
+  -webkit-text-fill-color: #4b3544 !important;
+  opacity: 1 !important;
+}
+
+.upload-page :deep(.u-input),
+.upload-page :deep(.u-textarea),
+.upload-page :deep(.u-input__content),
+.upload-page :deep(.u-input__content__field-wrapper),
+.upload-page :deep(.u-input__content__field-wrapper__field),
+.upload-page :deep(.u-textarea__field),
+.upload-page :deep(input),
+.upload-page :deep(textarea) {
+  color: #24352d !important;
+  -webkit-text-fill-color: #24352d !important;
+  opacity: 1 !important;
+  caret-color: #d86693;
+}
+
+.upload-page :deep(.input-placeholder),
+.upload-page :deep(.textarea-placeholder),
+.upload-page :deep(input::placeholder),
+.upload-page :deep(textarea::placeholder) {
+  color: #8d7281 !important;
+  -webkit-text-fill-color: #8d7281 !important;
+  opacity: 1 !important;
+}
+
+.upload-page :deep(.picker-cell .u-cell__title-text),
+.upload-page :deep(.time-cell .u-cell__title-text),
+.upload-page :deep(.picker-cell .u-cell__title text),
+.upload-page :deep(.time-cell .u-cell__title text) {
+  color: #24352d !important;
+  -webkit-text-fill-color: #24352d !important;
+  opacity: 1 !important;
+  font-weight: 900 !important;
+}
+
+.upload-page :deep(.u-upload__button__text),
+.upload-page :deep(.u-upload__button text),
+.upload-page :deep(.u-upload uni-text) {
+  color: #5d3753 !important;
+  -webkit-text-fill-color: #5d3753 !important;
+  opacity: 1 !important;
+  font-weight: 900 !important;
 }
 
 .panel-head :deep(.u-button),
