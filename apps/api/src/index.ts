@@ -83,14 +83,29 @@ function detectImageExtension(file: Express.Multer.File) {
   return "";
 }
 
+async function findDemoUser() {
+  const userWithDemoData = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { orders: { some: {} } },
+        { reviews: { some: {} } },
+        { createdStores: { some: {} } },
+        { updatedStores: { some: {} } }
+      ]
+    },
+    orderBy: { createdAt: "asc" }
+  });
+  return userWithDemoData || await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
+}
+
 async function currentUser(req: express.Request) {
   const userId = String(req.header("x-user-id") || "");
   if (userId) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (user) return user;
   }
-  const first = await prisma.user.findFirst();
-  if (first) return first;
+  const fallbackUser = await findDemoUser();
+  if (fallbackUser) return fallbackUser;
   return prisma.user.create({
     data: {
       nickname: "体验用户",
@@ -363,6 +378,15 @@ app.post("/api/auth/login", async (req, res) => {
   const provider = req.body.provider || "mock";
   const providerOpenId = req.body.openId || (req.body.code ? `${provider}:${req.body.code}` : undefined);
   const nickname = req.body.nickname || "体验用户";
+
+  if (provider === "mock" && !providerOpenId) {
+    const fallbackUser = await findDemoUser();
+    const user = fallbackUser || await prisma.user.create({
+      data: { provider, providerOpenId: "mock:default", nickname, avatarColor: "#ffd100" }
+    });
+    return res.json({ user: toUserDto(user) });
+  }
+
   const user = providerOpenId
     ? await prisma.user.upsert({
         where: { providerOpenId },
@@ -516,6 +540,7 @@ app.post("/api/orders", async (req, res) => {
       rating: Number(req.body.rating || 4),
       disliked: Boolean(req.body.disliked),
       note: req.body.note,
+      imageUrl: req.body.imageUrl,
       rawText: req.body.rawText
     }
   });
@@ -604,7 +629,9 @@ app.put("/api/orders/:id", async (req, res) => {
       deliveryFee: req.body.deliveryFee === undefined ? undefined : Number(req.body.deliveryFee || 0),
       rating,
       disliked: req.body.disliked === undefined ? undefined : Boolean(req.body.disliked),
-      note: req.body.note
+      note: req.body.note,
+      imageUrl: req.body.imageUrl,
+      rawText: req.body.rawText
     }
   });
 
@@ -698,6 +725,26 @@ app.get("/api/reviews", async (req, res) => {
     orderBy: { createdAt: "desc" }
   });
   res.json({ reviews: reviews.map(toReviewDto) });
+});
+
+app.put("/api/reviews/:id", async (req, res) => {
+  const user = await currentUser(req);
+  const review = await prisma.review.findFirst({ where: { id: req.params.id, userId: user.id } });
+  if (!review) return res.status(404).json({ error: "review_not_found" });
+  const content = String(req.body.content ?? review.content).trim();
+  if (!content) return res.status(400).json({ error: "content_required" });
+  const ratingValue = req.body.rating === undefined ? review.rating : Number(req.body.rating);
+  const rating = Number.isFinite(ratingValue) ? Math.min(5, Math.max(0.5, Math.round(ratingValue * 2) / 2)) : review.rating;
+  const disliked = req.body.disliked === undefined ? review.disliked : Boolean(req.body.disliked);
+  const updated = await prisma.review.update({
+    where: { id: review.id },
+    data: { rating, disliked, content },
+    include: { user: true, store: true, dish: true }
+  });
+  if (updated.targetType === "order" && updated.orderId) {
+    await prisma.order.updateMany({ where: { id: updated.orderId, userId: user.id }, data: { rating, disliked, note: content } });
+  }
+  res.json({ review: toReviewDto(updated) });
 });
 
 app.delete("/api/reviews/:id", async (req, res) => {
@@ -796,8 +843,9 @@ app.get("/api/stats", async (req, res) => {
   const byMealTime = new Map<string, number>();
   const byRating = new Map<string, number>();
   const byUser = new Map<string, number>();
+  const dateKey = (date: Date) => date.toISOString().slice(0, 10);
   for (const order of orders) {
-    const day = order.orderTime.toISOString().slice(5, 10);
+    const day = dateKey(order.orderTime);
     byDay.set(day, (byDay.get(day) || 0) + order.total);
     byCategory.set(order.category, (byCategory.get(order.category) || 0) + order.total);
     byStoreCount.set(order.store.name, (byStoreCount.get(order.store.name) || 0) + 1);
@@ -813,7 +861,11 @@ app.get("/api/stats", async (req, res) => {
     const name = `${5 - index}分`;
     return { name, value: byRating.get(name) || 0 };
   });
-  const trend = mapToSeries(byDay).sort((a, b) => a.name.localeCompare(b.name));
+  const trend = [];
+  for (const cursor = new Date(periodStart); cursor <= periodEnd; cursor.setDate(cursor.getDate() + 1)) {
+    const name = dateKey(cursor);
+    trend.push({ name, value: Number((byDay.get(name) || 0).toFixed(1)) });
+  }
   const categories = mapToSeries(byCategory).sort((a, b) => b.value - a.value);
   const mealTimes = mapToSeries(byMealTime).sort((a, b) => b.value - a.value);
   const stores = mapToSeries(byStoreCount).sort((a, b) => b.value - a.value).slice(0, 5);

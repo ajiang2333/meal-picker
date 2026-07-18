@@ -35,24 +35,31 @@
         accept="image"
         upload-text="上传截图"
         upload-icon-color="#d86693"
-        width="220"
-        height="220"
+        width="148"
+        height="148"
         :preview-full-image="true"
         @afterRead="handleAfterRead"
         @delete="removeUpload"
       />
-      <u-textarea :placeholder-style="fieldPlaceholderStyle"
-        v-model="rawText"
-        class="soft-control text-area"
-        placeholder="粘贴订单文字：先写店铺名，菜品可用换行、分号、竖线或逗号分隔"
-        border="none"
-        height="156"
-        maxlength="500"
-        count
-      />
+      <view class="raw-input-card">
+        <view class="raw-input-head">
+          <text class="raw-input-title">粘贴订单文字</text>
+          <text class="raw-input-hint">店铺名一定要先写；时间支持 18:45、2026-07-18 18:45、7月18日 晚上6点45、下午6:45</text>
+        </view>
+        <u-textarea
+          :placeholder-style="fieldPlaceholderStyle"
+          v-model="rawText"
+          class="soft-control text-area"
+          placeholder="第一项必须是店铺名；后面可写时间、菜品、金额，例如：兰州牛肉面；2026-07-18 18:45；招牌牛肉面 18"
+          border="none"
+          height="188"
+          maxlength="800"
+          count
+        />
+      </view>
       <view class="text-order-example">
         <text class="example-label">示例</text>
-        <text class="example-copy">兰州牛肉面；招牌牛肉面 18；红油小菜 6；冰粉 8</text>
+        <text class="example-copy">店铺名在最前：兰州牛肉面；2026-07-18 18:45 / 下午6:45 / 7月18日 晚上6点45；招牌牛肉面 18；红油小菜 6；冰粉 8</text>
       </view>
       <u-button
         text="从文字提取"
@@ -95,16 +102,16 @@
           </u-form-item>
           <u-form-item label="订单评分">
             <view class="rate-field">
-              <u-rate v-model="form.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" />
-              <text class="rate-text">{{ form.rating }} 分</text>
+              <u-rate v-model="form.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" allow-half />
+              <text class="rate-text">{{ formatRating(form.rating) }} 分</text>
             </view>
           </u-form-item>
         </view>
 
-        <u-form-item label="不再推荐">
+        <u-form-item label="是否不再推荐">
           <view class="switch-field">
             <text>{{ form.disliked ? "已标记不喜欢" : "仍可进入抽选池" }}</text>
-            <u-switch v-model="form.disliked" active-color="#ff9fbe" inactive-color="#9fecc8" />
+            <u-switch v-model="form.disliked" active-color="#ff9fbe" inactive-color="#d5d8d6" />
           </view>
         </u-form-item>
 
@@ -157,10 +164,22 @@
           <view class="dish-form-item">
             <text class="dish-form-label">菜品评分</text>
             <view class="rate-field dish-rate-field">
-              <u-rate v-model="dish.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" />
-              <text class="rate-text">{{ dish.rating }} 分</text>
+              <u-rate v-model="dish.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" allow-half />
+              <text class="rate-text">{{ formatRating(dish.rating) }} 分</text>
             </view>
           </view>
+        </view>
+        <view class="dish-form-item dish-note-item">
+          <text class="dish-form-label">菜品评价</text>
+          <u-textarea
+            :placeholder-style="fieldPlaceholderStyle"
+            v-model="dish.note"
+            border="none"
+            height="104"
+            placeholder="比如口味、分量、下次是否还点"
+            maxlength="160"
+            count
+          />
         </view>
       </view>
 
@@ -267,6 +286,7 @@ const pickerTitleStyle = {
 const uploadFiles = ref<UploadFile[]>([]);
 const orderTimeValue = ref(Date.now());
 const picker = reactive({ category: false, mealTime: false, orderTime: false });
+const defaultRating = 4.5;
 const editingOrderId = ref("");
 const deleteDialog = reactive({
   show: false,
@@ -280,10 +300,10 @@ const form = reactive({
   mealTime: "午餐",
   orderTime: formatDateTime(orderTimeValue.value),
   total: 0 as number | string,
-  rating: 4,
+  rating: defaultRating,
   disliked: false,
   note: "",
-  dishes: [{ name: "", price: 0, rating: 4, disliked: false, note: "" }] as DishForm[]
+  dishes: [{ name: "", price: 0, rating: defaultRating, disliked: false, note: "" }] as DishForm[]
 });
 
 const pageTitle = computed(() => editingOrderId.value ? "编辑订单" : "上传订单");
@@ -291,7 +311,7 @@ const saveButtonText = computed(() => editingOrderId.value ? "保存订单修改
 const orderTimeText = computed(() => form.orderTime.replace("T", " "));
 
 function createEmptyDish(): DishForm {
-  return { name: "", price: 0, rating: 4, disliked: false, note: "" };
+  return { name: "", price: 0, rating: defaultRating, disliked: false, note: "" };
 }
 
 function resetForm() {
@@ -305,7 +325,7 @@ function resetForm() {
     mealTime: mealTimes[1] || mealTimes[0],
     orderTime: formatDateTime(orderTimeValue.value),
     total: 0,
-    rating: 4,
+    rating: defaultRating,
     disliked: false,
     note: ""
   });
@@ -321,7 +341,7 @@ function fillFormFromOrder(order: Order) {
     mealTime: order.mealTime || mealTimes[1] || mealTimes[0],
     orderTime: formatDateTime(orderTimeValue.value),
     total: Number(order.total || 0),
-    rating: Number(order.rating || 4),
+    rating: normalizeRating(order.rating, defaultRating),
     disliked: Boolean(order.disliked),
     note: order.note || ""
   });
@@ -329,7 +349,7 @@ function fillFormFromOrder(order: Order) {
   form.dishes = dishes.map((dish) => ({
     name: dish.name || "",
     price: Number(dish.price || 0),
-    rating: Number(dish.rating || order.rating || 4),
+    rating: normalizeRating(dish.rating ?? order.rating, defaultRating),
     disliked: Boolean(dish.disliked),
     note: dish.note || ""
   }));
@@ -420,32 +440,138 @@ function closeUploadOverlays() {
 }
 
 function extract() {
-  const parts = parseOrderText(rawText.value);
-  if (!parts.length) {
+  const parsed = parseOrderText(rawText.value);
+  if (!parsed.storeName && !parsed.dishLines.length && !parsed.orderTime) {
     uni.showToast({ title: "先粘贴订单文字", icon: "none" });
     return;
   }
-  form.storeName = parts[0] || form.storeName;
-  const dishes = parts.slice(1).map((line) => {
-    const match = line.match(/(.+?)\s*[\u00a5\uffe5]?[\s:]*(\d+(?:\.\d+)?)/);
-    return { name: match?.[1]?.trim() || line, price: Number(match?.[2] || 0), rating: 4, disliked: false, note: "" };
-  });
-  form.dishes = dishes.length ? dishes : form.dishes;
-  form.total = form.dishes.reduce((sum, item) => sum + Number(item.price || 0), 0);
+
+  if (parsed.storeName) form.storeName = parsed.storeName;
+  if (parsed.orderTime) setOrderTimeFromValue(parsed.orderTime, true);
+  else if (parsed.mealTime) form.mealTime = parsed.mealTime;
+  if (parsed.rating) form.rating = normalizeRating(parsed.rating, form.rating);
+  if (parsed.note) form.note = parsed.note;
+
+  const dishes = parsed.dishLines.map(parseDishLine).filter((dish) => dish.name || Number(dish.price || 0) > 0);
+  if (dishes.length) form.dishes = dishes;
+  form.total = parsed.total ?? form.dishes.reduce((sum, item) => sum + Number(item.price || 0), 0);
+  uni.showToast({ title: parsed.orderTime ? "已提取订单和时间" : "已提取订单文字", icon: "none" });
 }
 
-function parseOrderText(value: string) {
-  return value
-    .replace(/\r/g, "\n")
-    .replace(/[\uff1b;\uff5c|]/g, "\n")
-    .replace(/[\uff0c,\u3001](?=\s*[^\uff0c,\u3001\uff1b;\uff5c|\n]+?\s*[\u00a5\uffe5]?\s*\d)/g, "\n")
+type ParsedOrderText = {
+  storeName: string;
+  dishLines: string[];
+  orderTime?: string;
+  mealTime?: string;
+  total?: number;
+  rating?: number;
+  note?: string;
+};
+
+function parseOrderText(value: string): ParsedOrderText {
+  const normalized = value.replace(/\r/g, "\n");
+  const orderTime = extractOrderDateTime(normalized);
+  const mealTime = orderTime ? inferMealTimeFromDate(new Date(orderTime).getTime()) : extractMealTime(normalized);
+  const total = extractAmount(normalized);
+  const rating = extractRating(normalized);
+  const note = extractNote(normalized);
+  const parts = normalized
+    .replace(/[；;｜|]/g, "\n")
+    .replace(/[，,、](?=\s*[^，,、；;｜|\n]+?\s*[¥￥]?\s*\d)/g, "\n")
     .split(/\n+/)
-    .map((item) => item.trim().replace(/^[-*\u2022]+\s*/, ""))
+    .map((item) => item.trim().replace(/^[-*•]+\s*/, ""))
     .filter(Boolean);
+
+  let storeName = "";
+  const dishLines: string[] = [];
+  for (const part of parts) {
+    const store = extractStoreName(part);
+    if (store) {
+      storeName = store;
+      continue;
+    }
+    if (isOrderMetaLine(part)) continue;
+    dishLines.push(part);
+  }
+
+  if (!storeName && dishLines.length) storeName = dishLines.shift() || "";
+  return { storeName, dishLines, orderTime, mealTime, total, rating, note };
+}
+
+function parseDishLine(line: string): DishForm {
+  const rating = extractRating(line) || defaultRating;
+  const clean = line
+    .replace(/(?:评分|打分)\s*[:：]?\s*[1-5](?:\.\d)?\s*分?/g, "")
+    .replace(/\s+x\s*\d+\s*$/i, "")
+    .trim();
+  const match = clean.match(/(.+?)\s*(?:[xX*]\s*\d+)?\s*[¥￥]?\s*(\d+(?:\.\d+)?)(?:\s*元)?\s*$/);
+  return {
+    name: (match?.[1] || clean).trim(),
+    price: Number(match?.[2] || 0),
+    rating: normalizeRating(rating, defaultRating),
+    disliked: false,
+    note: ""
+  };
+}
+
+function extractStoreName(line: string) {
+  const match = line.match(/^(?:店铺|商家|门店|店名)\s*[:：]\s*(.+)$/);
+  return match?.[1]?.trim() || "";
+}
+
+function isOrderMetaLine(line: string) {
+  if (/^(?:订单时间|下单时间|下单|时间|送达|取餐|用餐|时段|合计|总计|实付|金额|评分|打分|备注|评价|口味)\s*[:：]/.test(line)) return true;
+  if (extractStoreName(line)) return true;
+  if (extractOrderDateTime(line)) return true;
+  return false;
+}
+
+function extractAmount(value: string) {
+  const match = value.match(/(?:实付|合计|总计|总额|金额|支付)\s*[:：]?\s*[¥￥]?\s*(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : undefined;
+}
+
+function extractRating(value: string) {
+  const match = value.match(/(?:评分|打分)\s*[:：]?\s*([1-5](?:\.\d)?)/);
+  return match ? normalizeRating(match[1], defaultRating) : undefined;
+}
+
+function extractNote(value: string) {
+  const match = value.match(/(?:备注|评价|口味)\s*[:：]\s*([^\n；;]+)/);
+  return match?.[1]?.trim() || "";
+}
+
+function extractMealTime(value: string) {
+  const match = value.match(/(早餐|午餐|下午茶|晚餐|夜宵)/);
+  return match?.[1] || "";
+}
+
+function extractOrderDateTime(value: string) {
+  const normalized = value.replace(/\s+/g, " ");
+  const full = normalized.match(/(20\d{2})[年\/.\-](\d{1,2})[月\/.\-](\d{1,2})日?.{0,10}?(凌晨|早上|上午|中午|下午|晚上|夜宵)?\s*(\d{1,2})(?:[:：点时]\s*(\d{1,2}))?/);
+  if (full) return composeDateTime(Number(full[1]), Number(full[2]), Number(full[3]), Number(full[5]), Number(full[6] || 0), full[4]);
+
+  const now = new Date();
+  const monthDay = normalized.match(/(\d{1,2})[月\/.\-](\d{1,2})日?.{0,10}?(凌晨|早上|上午|中午|下午|晚上|夜宵)?\s*(\d{1,2})(?:[:：点时]\s*(\d{1,2}))?/);
+  if (monthDay) return composeDateTime(now.getFullYear(), Number(monthDay[1]), Number(monthDay[2]), Number(monthDay[4]), Number(monthDay[5] || 0), monthDay[3]);
+
+  const timeOnly = normalized.match(/(?:订单时间|下单时间|下单|时间|送达|取餐|用餐)?\s*(凌晨|早上|上午|中午|下午|晚上|夜宵)?\s*(\d{1,2})\s*[:：点时]\s*(\d{1,2})?/);
+  if (timeOnly) return composeDateTime(now.getFullYear(), now.getMonth() + 1, now.getDate(), Number(timeOnly[2]), Number(timeOnly[3] || 0), timeOnly[1]);
+
+  return "";
+}
+
+function composeDateTime(year: number, month: number, day: number, hour: number, minute: number, period?: string) {
+  let nextHour = hour;
+  if ((period === "下午" || period === "晚上" || period === "夜宵") && nextHour < 12) nextHour += 12;
+  if (period === "中午" && nextHour < 11) nextHour += 12;
+  if (period === "凌晨" && nextHour === 12) nextHour = 0;
+  const date = new Date(year, month - 1, day, nextHour, minute || 0);
+  return formatDateTime(date.getTime());
 }
 
 function addDish() {
-  form.dishes.push({ name: "", price: 0, rating: 4, disliked: false, note: "" });
+  form.dishes.push(createEmptyDish());
 }
 
 function removeDish(index: number) {
@@ -465,8 +591,7 @@ function confirmMealTime(event: { value?: string[]; indexs?: number[] }) {
 }
 function confirmOrderTime(event: { value?: number | string }) {
   const value = Number(event.value || orderTimeValue.value || Date.now());
-  orderTimeValue.value = value;
-  form.orderTime = formatDateTime(value);
+  setOrderTimeFromValue(value, true);
   picker.orderTime = false;
 }
 
@@ -476,10 +601,46 @@ function getPickerValue(event: { value?: unknown[]; indexs?: number[] }, fallbac
   const index = event.indexs?.[0] || 0;
   return fallback[index] || fallback[0];
 }
+function normalizeRating(value: number | string | undefined, fallback = defaultRating) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(5, Math.max(0.5, Math.round(parsed * 2) / 2));
+}
+
+function formatRating(value: number | string | undefined) {
+  return normalizeRating(value).toFixed(1);
+}
+
+function inferMealTimeFromDate(value: number | string) {
+  const date = coerceDate(value);
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 10) return mealTimes[0];
+  if (hour >= 10 && hour < 14) return mealTimes[1];
+  if (hour >= 14 && hour < 17) return mealTimes[2];
+  if (hour >= 17 && hour < 22) return mealTimes[3];
+  return mealTimes[4];
+}
+
+function setOrderTimeFromValue(value: number | string, syncMealTime = true) {
+  const date = coerceDate(value);
+  const time = date.getTime();
+  if (!Number.isFinite(time)) return;
+  orderTimeValue.value = time;
+  form.orderTime = formatDateTime(time);
+  if (syncMealTime) form.mealTime = inferMealTimeFromDate(time);
+}
+
+function coerceDate(value: number | string) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (Number.isFinite(numeric)) return new Date(numeric);
+  return new Date(String(value).replace(/\//g, "-").replace(" ", "T"));
+}
+
 function formatDateTime(value: number | string) {
-  const date = new Date(Number(value));
+  const date = coerceDate(value);
+  const safeDate = Number.isFinite(date.getTime()) ? date : new Date();
   const pad = (item: number) => String(item).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return safeDate.getFullYear() + "-" + pad(safeDate.getMonth() + 1) + "-" + pad(safeDate.getDate()) + "T" + pad(safeDate.getHours()) + ":" + pad(safeDate.getMinutes());
 }
 
 function buildPayload() {
@@ -487,7 +648,7 @@ function buildPayload() {
     .map((dish) => ({
       name: dish.name.trim(),
       price: Number(dish.price || 0),
-      rating: Number(dish.rating || form.rating || 4),
+      rating: normalizeRating(dish.rating, form.rating),
       disliked: Boolean(dish.disliked),
       note: dish.note
     }))
@@ -499,10 +660,11 @@ function buildPayload() {
     mealTime: form.mealTime,
     orderTime: form.orderTime,
     total: Number(form.total || 0),
-    rating: Number(form.rating || 4),
+    rating: normalizeRating(form.rating, defaultRating),
     disliked: Boolean(form.disliked),
     note: form.note.trim(),
-    dishes: dishes.length ? dishes : [{ name: "未命名菜品", price: Number(form.total || 0), rating: Number(form.rating || 4), disliked: false }]
+    rawText: rawText.value.trim(),
+    dishes: dishes.length ? dishes : [{ name: "未命名菜品", price: Number(form.total || 0), rating: normalizeRating(form.rating, defaultRating), disliked: false, note: "" }]
   };
 }
 
@@ -663,6 +825,44 @@ onTabItemTap(resetUploadTab);
   gap: 18rpx;
 }
 
+.raw-input-card {
+  display: grid;
+  gap: 14rpx;
+  border: 1rpx solid rgba(216, 102, 147, 0.22);
+  border-radius: 26rpx;
+  background: linear-gradient(135deg, rgba(255, 247, 251, 0.98), rgba(242, 255, 247, 0.9));
+  padding: 18rpx;
+  box-shadow: inset 0 0 0 1rpx rgba(255, 255, 255, 0.76), 0 12rpx 28rpx rgba(216, 102, 147, 0.08);
+}
+
+.raw-input-head {
+  display: grid;
+  gap: 6rpx;
+}
+
+.raw-input-title {
+  color: #513d4a;
+  font-size: 28rpx;
+  font-weight: 950;
+}
+
+.raw-input-hint {
+  color: #7e978b;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.raw-input-card :deep(.u-textarea) {
+  border: 2rpx solid rgba(216, 102, 147, 0.24) !important;
+  background: rgba(255, 252, 254, 0.98) !important;
+  box-shadow: 0 8rpx 22rpx rgba(216, 102, 147, 0.08), inset 0 0 0 1rpx rgba(255, 255, 255, 0.84) !important;
+}
+
+.dish-note-item {
+  margin-top: 18rpx;
+}
+
 
 .text-order-example {
   display: flex;
@@ -677,20 +877,20 @@ onTabItemTap(resetUploadTab);
 .example-label {
   flex: 0 0 auto;
   border-radius: 999rpx;
-  background: rgba(216, 102, 147, 0.12);
-  padding: 4rpx 12rpx;
+  background: rgba(216, 102, 147, 0.1);
+  padding: 3rpx 10rpx;
   color: #d86693;
-  font-size: 21rpx;
-  font-weight: 950;
+  font-size: 19rpx;
+  font-weight: 700;
   line-height: 1.35;
 }
 
 .example-copy {
   min-width: 0;
   color: #6f5e6b;
-  font-size: 23rpx;
-  font-weight: 800;
-  line-height: 1.5;
+  font-size: 21rpx;
+  font-weight: 500;
+  line-height: 1.55;
 }
 
 .form-grid,

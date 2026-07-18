@@ -25,6 +25,29 @@ image,
 scroll-view {
   box-sizing: border-box;
 }
+/* #ifdef H5 */
+input,
+textarea,
+uni-input,
+uni-textarea,
+.uni-input-input,
+.uni-textarea-textarea,
+.u-input__content__field-wrapper__field,
+.u-textarea__field,
+.u-search__content__input {
+  font-size: 16px !important;
+  -webkit-text-size-adjust: 100%;
+}
+
+input::placeholder,
+textarea::placeholder,
+.uni-input-placeholder,
+.uni-textarea-placeholder,
+.input-placeholder,
+.textarea-placeholder {
+  font-size: 16px !important;
+}
+/* #endif */
 
 .page {
   width: 100%;

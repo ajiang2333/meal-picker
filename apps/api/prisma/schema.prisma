@@ -72,7 +72,7 @@ model Order {
   category    String
   total       Float
   deliveryFee Float       @default(0)
-  rating      Int
+  rating      Float
   disliked    Boolean     @default(false)
   note        String?
   imageUrl    String?
@@ -91,7 +91,7 @@ model OrderItem {
   dish          Dish?    @relation(fields: [dishId], references: [id], onDelete: SetNull)
   nameSnapshot  String
   priceSnapshot Float
-  rating        Int?
+  rating        Float?
   disliked      Boolean  @default(false)
   note          String?
 }
@@ -103,7 +103,7 @@ model Review {
   dishId     String?
   orderId    String?
   targetType String
-  rating     Int
+  rating     Float
   disliked   Boolean  @default(false)
   content    String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)

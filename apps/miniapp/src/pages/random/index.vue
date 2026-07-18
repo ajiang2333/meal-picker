@@ -7,9 +7,9 @@
     </view>
     <view class="spring-hero">
       <view class="hero-copy">
-        <text class="eyebrow">SPRING MENU DRAW</text>
+        <text class="eyebrow">SPRING MENU GACHA</text>
         <text class="title">今天吃哪家</text>
-        <text class="subtitle">让春天替你抽一口快乐</text>
+        <text class="subtitle">今天吃什么，交给春日星盘</text>
       </view>
       <view class="hero-stats">
         <text class="stat-number">{{ candidateCount }}</text>
@@ -36,6 +36,14 @@
             <uni-icons type="bottom" size="14" color="#4f7b67" />
           </view>
         </picker>
+        <u-button
+          text="重置"
+          shape="circle"
+          color="#fff6fb"
+          custom-style="height: 38px; margin: 0; color: #d86693; font-size: 14px; font-weight: 900; border: 1px solid rgba(216, 102, 147, 0.28); box-shadow: 0 8px 18px rgba(216, 102, 147, 0.1);"
+          :disabled="isSpinning"
+          @click="resetFilters"
+        />
       </view>
 
       <view class="switch-row" @tap="toggleExclude">
@@ -44,7 +52,7 @@
         </view>
         <view>
           <text class="switch-title">排除不喜欢</text>
-          <text class="switch-hint">只把评分 3 分以上放进抽选池</text>
+          <text class="switch-hint">只把评分 3 分以上放进候选池</text>
         </view>
       </view>
     </view>
@@ -52,7 +60,7 @@
     <view class="wheel-card">
       <view class="wheel-topline">
         <view>
-          <text class="section-title">春日扭蛋抽选</text>
+          <text class="section-title">春日扭蛋机</text>
           <text class="section-note">{{ feedbackText }}</text>
         </view>
         <view class="spark-badge">扭蛋机</view>
@@ -79,7 +87,7 @@
           <view :class="['gacha-knob-hit', { disabled: isSpinning }]" @tap="spin">
             <view class="gacha-knob-plate">
               <image class="gacha-knob-img" :src="gachaKnob" mode="aspectFit" />
-              <text class="knob-label">{{ isSpinning ? "抽选中" : "扭一下" }}</text>
+              <text class="knob-label">{{ isSpinning ? "旋转中" : "扭一下" }}</text>
             </view>
           </view>
           <view class="gacha-outlet" @tap="openWinner">
@@ -96,16 +104,16 @@
         :disabled="isSpinning"
         @tap="spin"
       >
-        {{ isSpinning ? "春风正在转..." : "开始抽选" }}
+        {{ isSpinning ? "春风正在转..." : "开始扭蛋" }}
       </button>
 
       <view :class="['winner-panel', { blurring: isSpinning }]" @tap="openWinner">
         <image class="winner-cover" :src="winner?.coverUrl || defaultCover" mode="aspectFill" />
         <view class="winner-copy">
-          <text class="winner-kicker">{{ winner ? "今日命定" : "等待开奖" }}</text>
+          <text class="winner-kicker">{{ winner ? "今日命定" : "等待开启" }}</text>
           <text class="winner-name">{{ winner?.name || "点一下，让星盘替你决定" }}</text>
           <text class="winner-meta">
-            {{ winner ? `${winner.category} · ${winner.rating.toFixed(1)}分 · 点击查看店铺` : "筛选后点击开始抽选" }}
+            {{ winner ? `${winner.category} · ${winner.rating.toFixed(1)}分 · 点击查看店铺` : "筛选后点击开始扭蛋" }}
           </text>
         </view>
         <view v-if="isSpinning" class="winner-drawing-state">
@@ -113,7 +121,7 @@
             <u-loading-icon color="#d86693" size="22" />
           </view>
           <view class="drawing-copy">
-            <text class="drawing-title">正在摇出今天的命定</text>
+            <text class="drawing-title">正在摇出今天的选择</text>
             <text class="drawing-subtitle">胶囊滚动中，结果马上出舱</text>
           </view>
           <view class="drawing-dots"><view /><view /><view /></view>
@@ -124,7 +132,7 @@
     <view class="recent-panel">
       <view class="recent-head">
         <view>
-          <text class="section-title">最近抽选</text>
+          <text class="section-title">最近结果</text>
           <text class="section-note">最多展示 5 条记录</text>
         </view>
         <view v-if="randomTotal > 5" class="more-link" @tap="openMore">
@@ -150,7 +158,7 @@
       </u-list>
 
       <view v-else class="empty-state">
-        <text>还没有抽选记录</text>
+        <text>还没有随机记录</text>
         <text>第一颗春日食物星星等你点亮</text>
       </view>
     </view>
@@ -218,7 +226,7 @@ async function loadCandidateCount() {
   } catch (error) {
     candidateStores.value = [];
     candidateCount.value = 0;
-    feedbackText.value = "抽选服务还没连上";
+    feedbackText.value = "随机服务还没连上";
   }
 }
 
@@ -272,6 +280,18 @@ function toggleExclude() {
   loadCandidateCount();
 }
 
+function resetFilters() {
+  if (isSpinning.value) return;
+  category.value = categories[0] || "全部";
+  mealTime.value = mealTimes[0] || "全部";
+  excludeDisliked.value = true;
+  winner.value = null;
+  dropCapsuleVisible.value = false;
+  dropCapsuleIndex.value = 0;
+  feedbackText.value = "把纠结丢进粉绿星盘里";
+  loadCandidateCount();
+}
+
 function resetRandomPage() {
   category.value = "全部";
   mealTime.value = "全部";
@@ -315,11 +335,11 @@ async function spin() {
     winner.value = result.store;
     candidateCount.value = result.candidateCount || 0;
     dropCapsuleVisible.value = Boolean(result.store);
-    feedbackText.value = result.store ? `${result.store.name} 被星盘选中` : "没有抽到符合条件的店铺";
+    feedbackText.value = result.store ? `${result.store.name} 被星盘选中` : "没有开出符合条件的店铺";
     if (!result.store) showNoCandidateModal();
     await loadRecent();
   } catch (error) {
-    feedbackText.value = "暂时抽不出来，检查服务后再试";
+    feedbackText.value = "暂时开不出来，检查服务后再试";
   } finally {
     isSpinning.value = false;
   }
@@ -553,8 +573,9 @@ onShow(() => {
 
 .filters {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16rpx;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 132rpx;
+  gap: 14rpx;
+  align-items: center;
 }
 
 .picker-pill {

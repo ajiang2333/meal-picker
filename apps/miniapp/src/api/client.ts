@@ -350,6 +350,8 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       rating?: number;
       disliked?: boolean;
       note?: string;
+      rawText?: string;
+      imageUrl?: string;
       dishes?: OrderItemInput[];
     };
     const category = payload.category || existingOrder.category;
@@ -389,6 +391,7 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
     store.avgPrice = total || store.avgPrice;
     store.updatedBy = mockUsers[0];
 
+    const createdDishes: Array<typeof mockDishes[number]> = [];
     dishes.forEach((dish, index) => {
       const existingDish = mockDishes.find((item) => item.storeId === store.id && item.name === dish.name);
       if (existingDish) {
@@ -396,14 +399,16 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
         existingDish.rating = dish.rating || rating;
         existingDish.disliked = Boolean(dish.disliked);
       } else {
-        mockDishes.unshift({
+        const createdDish = {
           id: `mock-dish-upload-${Date.now()}-${index}`,
           storeId: store.id,
           name: dish.name,
           price: dish.price,
           rating: dish.rating || rating,
           disliked: Boolean(dish.disliked)
-        });
+        };
+        mockDishes.unshift(createdDish);
+        createdDishes.push(createdDish);
       }
     });
 
@@ -421,31 +426,62 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
     };
     mockOrders[orderIndex] = order;
 
-    const reviewIndex = mockReviews.findIndex((review) => review.orderId === id);
-    if (payload.note) {
-      const review = {
-        id: reviewIndex >= 0 ? mockReviews[reviewIndex].id : `mock-review-upload-${Date.now()}`,
+    mockReviews = mockReviews.filter((review) => review.orderId !== id);
+    if (payload.note || payload.disliked) {
+      mockReviews = [{
+        id: `mock-review-upload-${Date.now()}`,
         user: mockUsers[0],
         targetType: "order" as const,
         targetName: store.name,
         rating,
         disliked: Boolean(payload.disliked),
-        content: payload.note,
+        content: payload.note || "标记了不再推荐",
         createdAt: new Date().toISOString(),
         orderId: id
-      };
-      if (reviewIndex >= 0) mockReviews[reviewIndex] = review;
-      else mockReviews = [review, ...mockReviews];
-    } else if (reviewIndex >= 0) {
-      mockReviews.splice(reviewIndex, 1);
+      }, ...mockReviews];
     }
+    dishes.forEach((dish, index) => {
+      if (!dish.note && !dish.disliked) return;
+      mockReviews = [{
+        id: `mock-review-dish-${Date.now()}-${index}`,
+        user: mockUsers[0],
+        targetType: "dish" as const,
+        targetName: dish.name,
+        rating: Number(dish.rating || rating),
+        disliked: Boolean(dish.disliked),
+        content: dish.note || "标记了不再推荐",
+        createdAt: new Date().toISOString(),
+        orderId: id
+      }, ...mockReviews];
+    });
 
-    return { order } as T;
+    return {
+      orderId: order.id,
+      storeId: store.id,
+      createdStore: null,
+      createdDishes,
+      createdSummary: {
+        storeCreated: false,
+        dishCount: createdDishes.length,
+        dishNames: createdDishes.map((dish) => dish.name)
+      }
+    } as T;
   }
   if (method === "DELETE" && path.startsWith("/orders/")) {
     const id = path.split("/")[2];
     mockOrders = mockOrders.filter((order) => order.id !== id);
     return {} as T;
+  }
+
+  if (method === "PUT" && path.startsWith("/reviews/")) {
+    const id = path.split("/")[2];
+    const review = mockReviews.find((item) => item.id === id);
+    if (!review) return undefined;
+    const payload = (options.data || {}) as { rating?: number; disliked?: boolean; content?: string };
+    review.rating = Number(payload.rating || review.rating);
+    review.disliked = payload.disliked === undefined ? review.disliked : Boolean(payload.disliked);
+    review.content = payload.content?.trim() || review.content;
+    return { review } as T;
   }
 
   if (method === "DELETE" && path.startsWith("/reviews/")) {
@@ -481,6 +517,8 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       rating?: number;
       disliked?: boolean;
       note?: string;
+      rawText?: string;
+      imageUrl?: string;
       dishes?: OrderItemInput[];
     };
     const category = payload.category || "快餐";
@@ -550,7 +588,7 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       dishes
     };
     mockOrders = [order, ...mockOrders];
-    if (payload.note) {
+    if (payload.note || payload.disliked) {
       mockReviews = [{
         id: `mock-review-upload-${Date.now()}`,
         user: mockUsers[0],
@@ -558,11 +596,25 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
         targetName: store.name,
         rating,
         disliked: Boolean(payload.disliked),
-        content: payload.note,
+        content: payload.note || "标记了不再推荐",
         createdAt: new Date().toISOString(),
         orderId: order.id
       }, ...mockReviews];
     }
+    dishes.forEach((dish, index) => {
+      if (!dish.note && !dish.disliked) return;
+      mockReviews = [{
+        id: `mock-review-dish-${Date.now()}-${index}`,
+        user: mockUsers[0],
+        targetType: "dish",
+        targetName: dish.name,
+        rating: Number(dish.rating || rating),
+        disliked: Boolean(dish.disliked),
+        content: dish.note || "标记了不再推荐",
+        createdAt: new Date().toISOString(),
+        orderId: order.id
+      }, ...mockReviews];
+    });
     return {
       orderId: order.id,
       storeId: store.id,
@@ -614,13 +666,23 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
   if (path === "/orders") return { orders: mockOrders } as T;
   if (path === "/reviews") return { reviews: mockReviews } as T;
   if (path === "/stats") {
-    const trend = [
-      { name: "06-19", value: 52 },
-      { name: "06-28", value: 43 },
-      { name: "07-07", value: 33 },
-      { name: "07-16", value: 30 },
-      { name: "07-18", value: 30.1 }
-    ];
+    const rangeDays = Number(query.range || 30) === 7 ? 7 : 30;
+    const endDate = new Date("2026-07-18T12:00:00.000Z");
+    const startDate = new Date(endDate);
+    startDate.setUTCDate(endDate.getUTCDate() - rangeDays + 1);
+    const trendValues: Record<string, number> = {
+      "2026-06-19": 52,
+      "2026-06-28": 43,
+      "2026-07-07": 33,
+      "2026-07-16": 30,
+      "2026-07-18": 30.1
+    };
+    const trend = Array.from({ length: rangeDays }, (_, index) => {
+      const date = new Date(startDate);
+      date.setUTCDate(startDate.getUTCDate() + index);
+      const name = date.toISOString().slice(0, 10);
+      return { name, value: trendValues[name] || 0 };
+    });
     const categories = [
       { name: "烧烤", value: 52 },
       { name: "奶茶", value: 34.5 },
@@ -642,8 +704,8 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
     const users = mockUsers.map((user, index) => ({ name: user.nickname, value: [52, 34, 29][index] }));
     return {
       summary: { totalSpend: 115, orderCount: 3, averageOrderValue: 38.3, favoriteStore: "甜橙茶事" },
-      rangeDays: Number(query.range || 30) === 7 ? 7 : 30,
-      period: { from: "2026-06-19T00:00:00.000Z", to: "2026-07-18T23:59:59.999Z" },
+      rangeDays,
+      period: { from: startDate.toISOString(), to: "2026-07-18T23:59:59.999Z" },
       trend,
       categories,
       mealTimes,
@@ -728,11 +790,14 @@ export const api = {
     rating: number;
     disliked: boolean;
     note?: string;
+    rawText?: string;
+    imageUrl?: string;
     dishes: OrderItemInput[];
   }) => request<OrderCreateResult>("/orders", { method: "POST", data }),
   updateOrder: (id: string, data: unknown) => request(`/orders/${id}`, { method: "PUT", data }),
   deleteOrder: (id: string) => request(`/orders/${id}`, { method: "DELETE" }),
   reviews: () => request("/reviews"),
+  updateReview: (id: string, data: unknown) => request(`/reviews/${id}`, { method: "PUT", data }),
   deleteReview: (id: string) => request(`/reviews/${id}`, { method: "DELETE" }),
   stats: async (range: 7 | 30 = 30) => {
     const result = await request<Record<string, unknown>>(`/stats?range=${range}`);
