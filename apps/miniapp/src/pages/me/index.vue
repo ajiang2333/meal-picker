@@ -117,14 +117,11 @@
         </view>
       </u-list-item>
     </u-list>
-    <AdaptiveCharts
+    <StatsDashboard
       v-else-if="tab === 'stats'"
-      :line="charts.line"
-      :pie="charts.pie"
-      :donut="charts.donut"
-      :bars="charts.bars"
-      :ratings="charts.ratings"
-      :users="charts.users"
+      :dashboard="statsDashboard"
+      :loading="statsLoading"
+      @range-change="changeStatsRange"
     />
     <view v-else-if="tab === 'randoms' && randomLoading && !randomRecords.length" class="list-loading-panel random-loading-panel">
       <view v-for="item in 3" :key="item" class="random-skeleton-row">
@@ -222,9 +219,9 @@ import { onShow, onTabItemTap } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
 import { api } from "@/api/client";
 import { mockLogin, session } from "@/state/session";
-import AdaptiveCharts from "@/components/AdaptiveCharts.vue";
+import StatsDashboard from "@/components/StatsDashboard.vue";
 import UserBadge from "@/components/UserBadge.vue";
-import type { Order, RandomPick, Review, Store } from "@/types";
+import type { Order, RandomPick, Review, StatsDashboard as StatsDashboardData, Store } from "@/types";
 
 const tab = ref<"menu" | "orders" | "reviews" | "stats" | "randoms" | "stores">("menu");
 const orders = ref<Order[]>([]);
@@ -233,6 +230,7 @@ const stores = ref<Store[]>([]);
 const randomRecords = ref<RandomPick[]>([]);
 const randomTotal = ref(0);
 const loading = ref(false);
+const statsLoading = ref(false);
 const randomLoading = ref(false);
 const deleteDialog = reactive({
   show: false,
@@ -240,13 +238,16 @@ const deleteDialog = reactive({
   action: null as null | (() => Promise<void>)
 });
 const defaultCover = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80";
-const charts = reactive({
-  line: [] as Array<{ name: string; value: number }>,
-  pie: [] as Array<{ name: string; value: number }>,
-  donut: [] as Array<{ name: string; value: number }>,
-  bars: [] as Array<{ name: string; value: number }>,
-  ratings: [] as Array<{ name: string; value: number }>,
-  users: [] as Array<{ name: string; value: number }>
+const statsDashboard = reactive<StatsDashboardData>({
+  summary: { totalSpend: 0, orderCount: 0, averageOrderValue: 0, favoriteStore: "暂无" },
+  rangeDays: 30,
+  period: { from: "", to: "" },
+  trend: [],
+  categories: [],
+  mealTimes: [],
+  stores: [],
+  ratings: [],
+  users: []
 });
 const tabTitle = computed(() => {
   if (tab.value === "orders") return "我的订单";
@@ -303,6 +304,20 @@ function openTab(next: typeof tab.value) {
   if (next === "randoms" && !randomRecords.value.length) loadRandoms();
 }
 
+async function loadStats(range: 7 | 30 = statsDashboard.rangeDays) {
+  statsLoading.value = true;
+  try {
+    const result = await api.stats(range) as StatsDashboardData;
+    Object.assign(statsDashboard, result);
+  } finally {
+    statsLoading.value = false;
+  }
+}
+
+function changeStatsRange(range: 7 | 30) {
+  if (range !== statsDashboard.rangeDays) loadStats(range);
+}
+
 async function load() {
   loading.value = true;
   try {
@@ -314,13 +329,7 @@ async function load() {
     stores.value = ((await api.stores("?maintainedBy=me")) as { stores: Store[] }).stores;
     const randomResult = await api.randomPicks("?take=0&skip=0") as { records: RandomPick[]; total: number };
     randomTotal.value = randomResult.total;
-    const statResult = await api.stats() as typeof charts;
-    charts.line = statResult.line;
-    charts.pie = statResult.pie;
-    charts.donut = statResult.donut;
-    charts.bars = statResult.bars;
-    charts.ratings = statResult.ratings;
-    charts.users = statResult.users;
+    await loadStats();
   } finally {
     loading.value = false;
   }

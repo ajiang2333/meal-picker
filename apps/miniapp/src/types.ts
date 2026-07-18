@@ -85,3 +85,25 @@ export type RandomPick = {
   storeType: string;
   createdAt: string;
 };
+
+export type StatsSeriesItem = {
+  name: string;
+  value: number;
+};
+
+export type StatsDashboard = {
+  summary: {
+    totalSpend: number;
+    orderCount: number;
+    averageOrderValue: number;
+    favoriteStore: string;
+  };
+  rangeDays: 7 | 30;
+  period: { from: string; to: string };
+  trend: StatsSeriesItem[];
+  categories: StatsSeriesItem[];
+  mealTimes: StatsSeriesItem[];
+  stores: StatsSeriesItem[];
+  ratings: StatsSeriesItem[];
+  users: StatsSeriesItem[];
+};

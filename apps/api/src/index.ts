@@ -777,11 +777,22 @@ app.get("/api/random-picks", async (req, res) => {
   res.json({ records: records.map(toRandomPickDto), total, nextSkip: skip + records.length });
 });
 
-app.get("/api/stats", async (_req, res) => {
-  const orders = await prisma.order.findMany({ include: { store: true, user: true } });
+app.get("/api/stats", async (req, res) => {
+  const requestedRange = Number(req.query.range || 30);
+  const rangeDays = requestedRange === 7 ? 7 : 30;
+  const requestedEnd = req.query.to ? new Date(String(req.query.to)) : new Date();
+  const periodEnd = Number.isNaN(requestedEnd.getTime()) ? new Date() : requestedEnd;
+  const periodStart = new Date(periodEnd);
+  periodStart.setDate(periodStart.getDate() - rangeDays + 1);
+  periodStart.setHours(0, 0, 0, 0);
+  const orders = await prisma.order.findMany({
+    where: { orderTime: { gte: periodStart, lte: periodEnd } },
+    include: { store: true, user: true },
+    orderBy: { orderTime: "asc" }
+  });
   const byDay = new Map<string, number>();
   const byCategory = new Map<string, number>();
-  const byStore = new Map<string, number>();
+  const byStoreCount = new Map<string, number>();
   const byMealTime = new Map<string, number>();
   const byRating = new Map<string, number>();
   const byUser = new Map<string, number>();
@@ -789,20 +800,43 @@ app.get("/api/stats", async (_req, res) => {
     const day = order.orderTime.toISOString().slice(5, 10);
     byDay.set(day, (byDay.get(day) || 0) + order.total);
     byCategory.set(order.category, (byCategory.get(order.category) || 0) + order.total);
-    byStore.set(order.store.name, (byStore.get(order.store.name) || 0) + order.total);
+    byStoreCount.set(order.store.name, (byStoreCount.get(order.store.name) || 0) + 1);
     byMealTime.set(order.mealTime, (byMealTime.get(order.mealTime) || 0) + order.total);
     byRating.set(`${order.rating}分`, (byRating.get(`${order.rating}分`) || 0) + 1);
     byUser.set(order.user.nickname, (byUser.get(order.user.nickname) || 0) + order.total);
   }
   const mapToSeries = (map: Map<string, number>) =>
     [...map.entries()].map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }));
+  const totalSpend = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const favoriteStore = [...byStoreCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || "暂无";
+  const ratings = Array.from({ length: 5 }, (_, index) => {
+    const name = `${5 - index}分`;
+    return { name, value: byRating.get(name) || 0 };
+  });
+  const trend = mapToSeries(byDay).sort((a, b) => a.name.localeCompare(b.name));
+  const categories = mapToSeries(byCategory).sort((a, b) => b.value - a.value);
+  const mealTimes = mapToSeries(byMealTime).sort((a, b) => b.value - a.value);
+  const stores = mapToSeries(byStoreCount).sort((a, b) => b.value - a.value).slice(0, 5);
+  const users = mapToSeries(byUser).sort((a, b) => b.value - a.value);
   res.json({
-    line: mapToSeries(byDay).sort((a, b) => a.name.localeCompare(b.name)),
-    pie: mapToSeries(byCategory).sort((a, b) => b.value - a.value),
-    donut: mapToSeries(byMealTime).sort((a, b) => b.value - a.value),
-    bars: mapToSeries(byStore).sort((a, b) => b.value - a.value).slice(0, 5),
-    ratings: mapToSeries(byRating).sort((a, b) => b.name.localeCompare(a.name)),
-    users: mapToSeries(byUser).sort((a, b) => b.value - a.value)
+    summary: {
+      totalSpend: Number(totalSpend.toFixed(1)),
+      orderCount: orders.length,
+      averageOrderValue: Number((orders.length ? totalSpend / orders.length : 0).toFixed(1)),
+      favoriteStore
+    },
+    rangeDays,
+    period: { from: periodStart.toISOString(), to: periodEnd.toISOString() },
+    trend,
+    categories,
+    mealTimes,
+    stores,
+    ratings,
+    users,
+    line: trend,
+    pie: categories,
+    donut: mealTimes,
+    bars: stores
   });
 });
 

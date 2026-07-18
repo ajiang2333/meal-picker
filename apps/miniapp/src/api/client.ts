@@ -614,7 +614,42 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
   if (path === "/orders") return { orders: mockOrders } as T;
   if (path === "/reviews") return { reviews: mockReviews } as T;
   if (path === "/stats") {
+    const trend = [
+      { name: "06-19", value: 52 },
+      { name: "06-28", value: 43 },
+      { name: "07-07", value: 33 },
+      { name: "07-16", value: 30 },
+      { name: "07-18", value: 30.1 }
+    ];
+    const categories = [
+      { name: "烧烤", value: 52 },
+      { name: "奶茶", value: 34.5 },
+      { name: "快餐", value: 28.5 }
+    ];
+    const mealTimes = [
+      { name: "夜宵", value: 51.8 },
+      { name: "下午茶", value: 34.5 },
+      { name: "午餐", value: 28.8 }
+    ];
+    const stores = mockStores.slice(0, 3).map((store) => ({ name: store.name, value: 1 }));
+    const ratings = [
+      { name: "5分", value: 1 },
+      { name: "4分", value: 1 },
+      { name: "3分", value: 1 },
+      { name: "2分", value: 0 },
+      { name: "1分", value: 0 }
+    ];
+    const users = mockUsers.map((user, index) => ({ name: user.nickname, value: [52, 34, 29][index] }));
     return {
+      summary: { totalSpend: 115, orderCount: 3, averageOrderValue: 38.3, favoriteStore: "甜橙茶事" },
+      rangeDays: Number(query.range || 30) === 7 ? 7 : 30,
+      period: { from: "2026-06-19T00:00:00.000Z", to: "2026-07-18T23:59:59.999Z" },
+      trend,
+      categories,
+      mealTimes,
+      stores,
+      ratings,
+      users,
       line: [
         { name: "06-20", value: 25 },
         { name: "06-21", value: 27 },
@@ -632,13 +667,7 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
         { name: "下午茶", value: 1 },
         { name: "晚餐", value: 1 }
       ],
-      bars: mockStores.slice(0, 5).map((store) => ({ name: store.name, value: store.orderCount })),
-      ratings: [
-        { name: "5分", value: 2 },
-        { name: "4分", value: 2 },
-        { name: "3分", value: 0 }
-      ],
-      users: mockUsers.map((user, index) => ({ name: user.nickname, value: [80, 42, 36][index] }))
+      bars: mockStores.slice(0, 5).map((store) => ({ name: store.name, value: store.orderCount }))
     } as T;
   }
   return undefined;
@@ -705,6 +734,10 @@ export const api = {
   deleteOrder: (id: string) => request(`/orders/${id}`, { method: "DELETE" }),
   reviews: () => request("/reviews"),
   deleteReview: (id: string) => request(`/reviews/${id}`, { method: "DELETE" }),
-  stats: () => request("/stats"),
+  stats: async (range: 7 | 30 = 30) => {
+    const result = await request<Record<string, unknown>>(`/stats?range=${range}`);
+    if (result.summary && result.trend && result.categories) return result;
+    return mockRequest(`/stats?range=${range}`) || result;
+  },
   uploadImage
 };
