@@ -209,6 +209,8 @@ function toOrderDto(order: any) {
     rating: order.rating,
     disliked: order.disliked,
     note: order.note,
+    imageUrl: order.imageUrl,
+    rawText: order.rawText,
     dishes: (order.items || []).map((item: any) => ({
       dishId: item.dishId,
       name: item.nameSnapshot,

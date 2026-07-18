@@ -422,6 +422,8 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       rating,
       disliked: Boolean(payload.disliked),
       note: payload.note || "",
+      rawText: payload.rawText ?? existingOrder.rawText,
+      imageUrl: payload.imageUrl ?? existingOrder.imageUrl,
       dishes
     };
     mockOrders[orderIndex] = order;
@@ -585,6 +587,8 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       rating,
       disliked: Boolean(payload.disliked),
       note: payload.note || "",
+      rawText: payload.rawText || "",
+      imageUrl: payload.imageUrl || "",
       dishes
     };
     mockOrders = [order, ...mockOrders];

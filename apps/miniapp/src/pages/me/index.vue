@@ -77,15 +77,14 @@
     </view>
     <u-list v-else-if="tab === 'orders'" class="detail-scroll spring-list page-flow-list" :scrollable="false" custom-style="height: auto;">
       <u-list-item v-for="order in visibleOrders" :key="order.id">
-        <view class="card list-card">
+        <view class="card list-card clickable-card" @tap="openOrder(order.id)">
           <view class="row"><text class="strong">{{ order.store.name }}</text><text class="score">{{ order.rating }}分</text></view>
           <view class="order-meta">
             <text class="time-pill">{{ formatDisplayTime(order.orderTime) }}</text>
             <text class="amount-pill">¥{{ formatAmount(order.total) }}</text>
           </view>
           <text class="order-note">{{ order.note || '这单还没有备注' }}</text>
-          <view class="actions">
-            <view class="action-hit" @tap.stop="editOrder(order.id)"><u-button text="编辑" size="mini" shape="circle" color="#e2fbe9" custom-style="width: 58px; height: 28px; margin: 0; color: #4f7b67; font-weight: 900; padding: 0; pointer-events: none;" /></view>
+          <view class="actions single-action">
             <view class="action-hit" @tap.stop="deleteOrder(order.id)"><u-button text="删除" size="mini" shape="circle" color="#ffe4ef" custom-style="width: 58px; height: 28px; margin: 0; color: #d86693; font-weight: 900; padding: 0; pointer-events: none;" /></view>
           </view>
         </view>
@@ -413,9 +412,9 @@ async function loadRandoms() {
   }
 }
 
-function editOrder(id: string) {
-  uni.setStorageSync("editingOrderId", id);
-  uni.switchTab({ url: "/pages/upload/index" });
+
+function openOrder(id: string) {
+  uni.navigateTo({ url: "/pages/order-detail/index?id=" + id });
 }
 
 function openStore(id: string) {

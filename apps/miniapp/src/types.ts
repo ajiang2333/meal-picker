@@ -46,9 +46,12 @@ export type Order = {
   mealTime: string;
   category: string;
   total: number;
+  deliveryFee?: number;
   rating: number;
   disliked: boolean;
   note?: string;
+  imageUrl?: string;
+  rawText?: string;
   dishes: OrderItemInput[];
 };
 

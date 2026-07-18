@@ -353,9 +353,9 @@ function fillFormFromOrder(order: Order) {
     disliked: Boolean(dish.disliked),
     note: dish.note || ""
   }));
-  image.value = "";
-  rawText.value = "";
-  uploadFiles.value = [];
+  image.value = order.imageUrl || "";
+  rawText.value = order.rawText || "";
+  uploadFiles.value = image.value ? [{ url: image.value, status: "success", message: "已选择" }] : [];
 }
 
 async function loadEditingOrder(id: string) {
@@ -664,6 +664,7 @@ function buildPayload() {
     disliked: Boolean(form.disliked),
     note: form.note.trim(),
     rawText: rawText.value.trim(),
+    imageUrl: image.value,
     dishes: dishes.length ? dishes : [{ name: "未命名菜品", price: Number(form.total || 0), rating: normalizeRating(form.rating, defaultRating), disliked: false, note: "" }]
   };
 }
