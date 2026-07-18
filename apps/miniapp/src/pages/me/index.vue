@@ -24,7 +24,7 @@
         <text>订单</text>
       </view>
       <view class="stat-card">
-        <text>{{ reviews.length }}</text>
+        <text>{{ orderReviewCount }}</text>
         <text>评价</text>
       </view>
       <view class="stat-card">
@@ -42,7 +42,7 @@
       <u-list-item>
         <view class="menu-row" @tap="tab = 'reviews'">
           <view class="menu-left"><view class="icon-bubble mint"><uni-icons type="chat" size="20" color="#4f9c72" /></view><view><text>我的评价</text><text class="menu-sub">留下你的口味星标</text></view></view>
-          <view class="menu-right"><text>{{ reviews.length }} 条</text><uni-icons type="arrowright" size="16" color="#d86693" /></view>
+          <view class="menu-right"><text>{{ orderReviewCount }} 条</text><uni-icons type="arrowright" size="16" color="#d86693" /></view>
         </view>
       </u-list-item>
       <u-list-item>
@@ -90,7 +90,7 @@
         </view>
       </u-list-item>
     </u-list>
-    <view v-else-if="tab === 'reviews' && loading && !reviews.length" class="list-loading-panel">
+    <view v-else-if="tab === 'reviews' && loading && !orderReviewCount" class="list-loading-panel">
       <view v-for="item in 3" :key="item" class="list-skeleton-card">
         <view class="skeleton-user-row"><view /><view /></view>
         <view class="skeleton-line strong" />
@@ -99,7 +99,7 @@
     </view>
     <view v-else-if="tab === 'reviews' && !visibleReviews.length" class="empty-panel">
       <u-empty mode="data" text="还没有评价记录" />
-      <text class="empty-hint">给店铺或菜品写下第一条评价吧。</text>
+      <text class="empty-hint">上传订单并填写订单评价后，这里会记录你的订单口味反馈。</text>
     </view>
     <u-list v-else-if="tab === 'reviews'" class="detail-scroll spring-list page-flow-list" :scrollable="false" custom-style="height: auto;">
       <u-list-item v-for="review in visibleReviews" :key="review.id">
@@ -282,7 +282,14 @@ const tabTitle = computed(() => {
   return "我维护的店铺";
 });
 const visibleOrders = computed(() => orders.value);
-const visibleReviews = computed(() => reviews.value);
+const orderMap = computed(() => new Map(orders.value.map((order) => [order.id, order])));
+const visibleReviews = computed(() => reviews.value
+  .filter((review) => review.targetType === "order")
+  .map((review) => {
+    const order = review.orderId ? orderMap.value.get(review.orderId) : null;
+    return order ? { ...review, targetName: order.store?.name || review.targetName } : review;
+  }));
+const orderReviewCount = computed(() => visibleReviews.value.length);
 const maintainedStores = computed(() => stores.value);
 const visibleStores = computed(() => maintainedStores.value);
 const totalSpent = computed(() => orders.value.reduce((sum, order) => sum + Number(order.total || 0), 0));

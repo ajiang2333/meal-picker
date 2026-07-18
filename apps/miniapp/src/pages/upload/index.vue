@@ -138,48 +138,91 @@
         />
       </view>
 
-      <view v-for="(dish, index) in form.dishes" :key="index" class="dish-card">
-        <view class="dish-title">
-          <text>菜品 {{ index + 1 }}</text>
+      <view v-if="hasLongDishList" class="dish-list-tools">
+        <text>已添加 {{ form.dishes.length }} 个菜品，默认折叠非当前项。</text>
+        <view class="dish-list-tool-actions">
           <u-button
-            v-if="form.dishes.length > 1"
-            text="移除"
+            text="展开全部"
             size="mini"
             shape="circle"
-            class="dish-action-btn dish-remove-btn"
-            color="#ffe1ed"
-            custom-style="width: 58px; height: 28px; margin: 0; color: #9b4268; font-weight: 900; padding: 0; box-shadow: inset 0 0 0 1px rgba(216, 102, 147, 0.16);"
-            @click="removeDish(index)"
+            color="#e2fbe9"
+            custom-style="width: 72px; height: 28px; margin: 0; color: #4f7b67; font-weight: 900; padding: 0;"
+            @click="expandAllDishes"
+          />
+          <u-button
+            text="收起到当前"
+            size="mini"
+            shape="circle"
+            color="#ffe4ef"
+            custom-style="width: 86px; height: 28px; margin: 0; color: #d86693; font-weight: 900; padding: 0;"
+            @click="collapseToActiveDish"
           />
         </view>
-        <view class="dish-grid">
-          <view class="dish-form-item">
-            <text class="dish-form-label">菜品名称</text>
-            <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="dish.name" border="none" clearable placeholder="菜品名" />
+      </view>
+
+      <view
+        v-for="(dish, index) in form.dishes"
+        :id="'dish-card-' + index"
+        :key="index"
+        :class="['dish-card', { 'dish-card--active': activeDishIndex === index, 'dish-card--collapsed': !isDishExpanded(index) }]"
+      >
+        <view class="dish-title" @tap="toggleDish(index)">
+          <view class="dish-title-main">
+            <text>菜品 {{ index + 1 }}</text>
+            <text class="dish-title-summary">{{ dishSummary(dish, index) }}</text>
           </view>
-          <view class="dish-form-item">
-            <text class="dish-form-label">菜品价格</text>
-            <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="dish.price" border="none" type="digit" placeholder="价格" />
-          </view>
-          <view class="dish-form-item">
-            <text class="dish-form-label">菜品评分</text>
-            <view class="rate-field dish-rate-field">
-              <u-rate v-model="dish.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" allow-half />
-              <text class="rate-text">{{ formatRating(dish.rating) }} 分</text>
+          <view class="dish-title-actions">
+            <u-button
+              v-if="hasLongDishList"
+              :text="isDishExpanded(index) ? '收起' : '展开'"
+              size="mini"
+              shape="circle"
+              class="dish-action-btn dish-collapse-btn"
+              color="#e2fbe9"
+              custom-style="width: 58px; height: 28px; margin: 0; color: #4f7b67; font-weight: 900; padding: 0; pointer-events: none;"
+            />
+            <view v-if="form.dishes.length > 1" class="dish-action-hit" @tap.stop="removeDish(index)">
+              <u-button
+                text="移除"
+                size="mini"
+                shape="circle"
+                class="dish-action-btn dish-remove-btn"
+                color="#ffe1ed"
+                custom-style="width: 58px; height: 28px; margin: 0; color: #9b4268; font-weight: 900; padding: 0; box-shadow: inset 0 0 0 1px rgba(216, 102, 147, 0.16); pointer-events: none;"
+              />
             </view>
           </view>
         </view>
-        <view class="dish-form-item dish-note-item">
-          <text class="dish-form-label">菜品评价</text>
-          <u-textarea
-            :placeholder-style="fieldPlaceholderStyle"
-            v-model="dish.note"
-            border="none"
-            height="104"
-            placeholder="比如口味、分量、下次是否还点"
-            maxlength="160"
-            count
-          />
+        <view v-if="isDishExpanded(index)" class="dish-body">
+          <view class="dish-grid">
+            <view class="dish-form-item">
+              <text class="dish-form-label">菜品名称</text>
+              <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="dish.name" border="none" clearable placeholder="菜品名" />
+            </view>
+            <view class="dish-form-item">
+              <text class="dish-form-label">菜品价格</text>
+              <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="dish.price" border="none" type="digit" placeholder="价格" />
+            </view>
+            <view class="dish-form-item">
+              <text class="dish-form-label">菜品评分</text>
+              <view class="rate-field dish-rate-field">
+                <u-rate v-model="dish.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" allow-half />
+                <text class="rate-text">{{ formatRating(dish.rating) }} 分</text>
+              </view>
+            </view>
+          </view>
+          <view class="dish-form-item dish-note-item">
+            <text class="dish-form-label">菜品评价</text>
+            <u-textarea
+              :placeholder-style="fieldPlaceholderStyle"
+              v-model="dish.note"
+              border="none"
+              height="104"
+              placeholder="比如口味、分量、下次是否还点"
+              maxlength="160"
+              count
+            />
+          </view>
         </view>
       </view>
 
@@ -239,7 +282,7 @@
 
 <script setup lang="ts">
 import { onShow, onTabItemTap } from "@dcloudio/uni-app";
-import { computed, reactive, ref } from "vue";
+import { computed, nextTick, reactive, ref } from "vue";
 import { api } from "@/api/client";
 import type { Order, OrderCreateResult } from "@/types";
 
@@ -309,9 +352,78 @@ const form = reactive({
 const pageTitle = computed(() => editingOrderId.value ? "编辑订单" : "上传订单");
 const saveButtonText = computed(() => editingOrderId.value ? "保存订单修改" : "保存订单并同步店铺库");
 const orderTimeText = computed(() => form.orderTime.replace("T", " "));
+const activeDishIndex = ref(0);
+const expandedDishIndexes = ref<number[]>([0]);
+const hasLongDishList = computed(() => form.dishes.length > 2);
 
 function createEmptyDish(): DishForm {
   return { name: "", price: 0, rating: defaultRating, disliked: false, note: "" };
+}
+
+function dishIndexes() {
+  return form.dishes.map((_, index) => index);
+}
+
+function syncDishPanels(preferredIndex = activeDishIndex.value) {
+  const maxIndex = Math.max(0, form.dishes.length - 1);
+  const safeIndex = Math.min(Math.max(0, preferredIndex), maxIndex);
+  activeDishIndex.value = safeIndex;
+  expandedDishIndexes.value = hasLongDishList.value ? [safeIndex] : dishIndexes();
+}
+
+function isDishExpanded(index: number) {
+  return !hasLongDishList.value || expandedDishIndexes.value.includes(index);
+}
+
+function expandDish(index: number, shouldScroll = false) {
+  activeDishIndex.value = index;
+  if (hasLongDishList.value) {
+    expandedDishIndexes.value = expandedDishIndexes.value.includes(index) ? expandedDishIndexes.value : [index];
+  } else {
+    expandedDishIndexes.value = dishIndexes();
+  }
+  if (shouldScroll) scrollToDish(index);
+}
+
+function toggleDish(index: number) {
+  activeDishIndex.value = index;
+  if (!hasLongDishList.value) return;
+  if (isDishExpanded(index)) {
+    expandedDishIndexes.value = expandedDishIndexes.value.filter((item) => item !== index);
+    return;
+  }
+  expandDish(index, true);
+}
+
+function expandAllDishes() {
+  expandedDishIndexes.value = dishIndexes();
+}
+
+function collapseToActiveDish() {
+  syncDishPanels(activeDishIndex.value);
+  scrollToDish(activeDishIndex.value);
+}
+
+function scrollToDish(index: number) {
+  void nextTick(() => {
+    setTimeout(() => {
+      uni.pageScrollTo({ selector: "#dish-card-" + index, duration: 260 });
+    }, 80);
+  });
+}
+
+function dishSummary(dish: DishForm, index: number) {
+  const name = String(dish.name || "菜品 " + (index + 1)).trim();
+  const price = Number(dish.price || 0);
+  const parts = [name];
+  if (price > 0) parts.push("¥" + formatMoney(price));
+  parts.push(formatRating(dish.rating) + "分");
+  if (dish.disliked) parts.push("不再推荐");
+  return parts.join(" · ");
+}
+
+function formatMoney(value: number | string | undefined) {
+  return Number(value || 0).toFixed(2).replace(/\.00$/, "");
 }
 
 function resetForm() {
@@ -330,6 +442,7 @@ function resetForm() {
     note: ""
   });
   form.dishes = [createEmptyDish()];
+  syncDishPanels(0);
 }
 
 function fillFormFromOrder(order: Order) {
@@ -356,6 +469,7 @@ function fillFormFromOrder(order: Order) {
   image.value = order.imageUrl || "";
   rawText.value = order.rawText || "";
   uploadFiles.value = image.value ? [{ url: image.value, status: "success", message: "已选择" }] : [];
+  syncDishPanels(0);
 }
 
 async function loadEditingOrder(id: string) {
@@ -453,7 +567,10 @@ function extract() {
   if (parsed.note) form.note = parsed.note;
 
   const dishes = parsed.dishLines.map(parseDishLine).filter((dish) => dish.name || Number(dish.price || 0) > 0);
-  if (dishes.length) form.dishes = dishes;
+  if (dishes.length) {
+    form.dishes = dishes;
+    syncDishPanels(0);
+  }
   form.total = parsed.total ?? form.dishes.reduce((sum, item) => sum + Number(item.price || 0), 0);
   uni.showToast({ title: parsed.orderTime ? "已提取订单和时间" : "已提取订单文字", icon: "none" });
 }
@@ -571,12 +688,15 @@ function composeDateTime(year: number, month: number, day: number, hour: number,
 }
 
 function addDish() {
+  const nextIndex = form.dishes.length;
   form.dishes.push(createEmptyDish());
+  expandDish(nextIndex, true);
 }
 
 function removeDish(index: number) {
   requestDelete("确定移除这个菜品吗？", () => {
     form.dishes.splice(index, 1);
+    syncDishPanels(Math.min(index, form.dishes.length - 1));
   });
 }
 
@@ -912,6 +1032,32 @@ onTabItemTap(resetUploadTab);
   width: 100%;
 }
 
+.dish-list-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  border: 1rpx dashed rgba(142, 230, 184, 0.9);
+  border-radius: 24rpx;
+  background: rgba(241, 255, 247, 0.82);
+  padding: 16rpx;
+}
+
+.dish-list-tools > text,
+.dish-list-tools > uni-text {
+  min-width: 0;
+  color: #5b7569;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.dish-list-tool-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 10rpx;
+}
+
 .dish-form-label {
   color: #715869;
   font-size: 25rpx;
@@ -922,7 +1068,8 @@ onTabItemTap(resetUploadTab);
   justify-content: space-between;
 }
 
-.dish-action-btn {
+.dish-action-btn,
+.dish-action-hit {
   flex: 0 0 auto;
 }
 
@@ -967,6 +1114,15 @@ onTabItemTap(resetUploadTab);
   box-shadow: 0 12rpx 30rpx rgba(95, 159, 124, 0.08), inset 0 0 0 1rpx rgba(255, 255, 255, 0.72);
 }
 
+.dish-card--active {
+  border-color: rgba(216, 102, 147, 0.62);
+  box-shadow: 0 16rpx 34rpx rgba(216, 102, 147, 0.14), inset 0 0 0 1rpx rgba(255, 255, 255, 0.78);
+}
+
+.dish-card--collapsed {
+  background: rgba(255, 255, 255, 0.84);
+}
+
 .dish-title {
   display: flex;
   align-items: center;
@@ -975,6 +1131,15 @@ onTabItemTap(resetUploadTab);
   min-height: 58rpx;
   margin-bottom: 16rpx;
   padding: 4rpx 0;
+}
+
+.dish-card--collapsed .dish-title {
+  margin-bottom: 0;
+}
+
+.dish-body {
+  display: grid;
+  gap: 18rpx;
 }
 
 .dish-title::before {
@@ -986,10 +1151,16 @@ onTabItemTap(resetUploadTab);
   background: linear-gradient(180deg, #d86693, #8ee6b8);
 }
 
-.dish-title > text,
-.dish-title > uni-text {
-  display: inline-flex;
+.dish-title-main {
+  display: grid;
   flex: 1 1 auto;
+  min-width: 0;
+  gap: 4rpx;
+}
+
+.dish-title-main > text:first-child,
+.dish-title-main > uni-text:first-child {
+  display: inline-flex;
   min-width: 0;
   align-items: center;
   background: transparent;
@@ -997,6 +1168,22 @@ onTabItemTap(resetUploadTab);
   color: #5d3753;
   font-size: 32rpx;
   font-weight: 950;
+}
+
+.dish-title-summary {
+  display: block;
+  overflow: hidden;
+  color: #7e978b;
+  font-size: 22rpx;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dish-title-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10rpx;
 }
 
 .picker-cell,

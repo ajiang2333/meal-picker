@@ -227,7 +227,7 @@ function toReviewDto(review: any) {
     id: review.id,
     user: toUserDto(review.user),
     targetType: review.targetType,
-    targetName: review.dish?.name || review.store?.name || "订单评价",
+    targetName: review.order?.store?.name || review.dish?.name || review.store?.name || "订单评价",
     rating: review.rating,
     disliked: review.disliked,
     content: review.content,
@@ -444,7 +444,11 @@ app.get("/api/stores/:id", async (req, res) => {
       createdBy: true,
       updatedBy: true,
       orders: true,
-      reviews: { include: { user: true, dish: true, store: true } },
+      reviews: {
+        where: { targetType: "order" },
+        include: { user: true, dish: true, store: true, order: { include: { store: true } } },
+        orderBy: { createdAt: "desc" }
+      },
       dishes: { include: { reviews: true } }
     }
   });
@@ -723,7 +727,7 @@ app.get("/api/reviews", async (req, res) => {
   const user = await currentUser(req);
   const reviews = await prisma.review.findMany({
     where: { userId: user.id },
-    include: { user: true, store: true, dish: true },
+    include: { user: true, store: true, dish: true, order: { include: { store: true } } },
     orderBy: { createdAt: "desc" }
   });
   res.json({ reviews: reviews.map(toReviewDto) });
@@ -741,7 +745,7 @@ app.put("/api/reviews/:id", async (req, res) => {
   const updated = await prisma.review.update({
     where: { id: review.id },
     data: { rating, disliked, content },
-    include: { user: true, store: true, dish: true }
+    include: { user: true, store: true, dish: true, order: { include: { store: true } } }
   });
   if (updated.targetType === "order" && updated.orderId) {
     await prisma.order.updateMany({ where: { id: updated.orderId, userId: user.id }, data: { rating, disliked, note: content } });

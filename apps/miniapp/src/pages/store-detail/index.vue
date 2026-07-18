@@ -140,10 +140,10 @@
         <text class="section-title">具体用户评价</text>
         <text class="section-note">春日口味留言板</text>
       </view>
-      <text class="count">{{ reviews.length }} 条</text>
+      <text class="count">{{ visibleReviews.length }} 条</text>
     </view>
     <u-list v-if="store" class="review-list spring-list fixed-scroll-list review-scroll-list" custom-style="height: auto; max-height: 520rpx;">
-      <u-list-item v-for="review in reviews" :key="review.id">
+      <u-list-item v-for="review in visibleReviews" :key="review.id">
         <view class="review-card">
           <view class="review-card-head">
             <UserBadge :user="review.user" />
@@ -153,10 +153,10 @@
           <text class="review-text">{{ review.content }}</text>
         </view>
       </u-list-item>
-      <u-list-item v-if="!reviews.length">
+      <u-list-item v-if="!visibleReviews.length">
         <view class="empty-card">
           <text>还没有评价</text>
-          <text>等第一条粉绿口味笔记出现</text>
+          <text>上传订单并填写评价后会显示在这里</text>
         </view>
       </u-list-item>
     </u-list>
@@ -182,6 +182,7 @@ const coverError = ref(false);
 const localCover = ref("");
 const defaultCover = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80";
 const coverSrc = computed(() => localCover.value || store.value?.coverUrl || defaultCover);
+const visibleReviews = computed(() => reviews.value.filter((review) => review.targetType === "order"));
 const editForm = reactive({
   name: "",
   category: "",

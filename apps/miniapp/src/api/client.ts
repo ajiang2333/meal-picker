@@ -642,7 +642,12 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
     return {
       store,
       dishes: mockDishes.filter((dish) => dish.storeId === id),
-      reviews: mockReviews.filter((review) => review.targetName === store.name || mockDishes.some((dish) => dish.storeId === id && dish.name === review.targetName))
+      reviews: mockReviews
+        .filter((review) => review.targetType === "order" && (review.targetName === store.name || mockOrders.some((order) => order.id === review.orderId && order.store.id === id)))
+        .map((review) => {
+          const order = mockOrders.find((item) => item.id === review.orderId);
+          return order ? { ...review, targetName: order.store.name } : review;
+        })
     } as T;
   }
   if (path.startsWith("/dishes/")) {
