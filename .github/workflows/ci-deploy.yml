@@ -1,4 +1,4 @@
-name: CI and production deploy
+name: CI and optional production deploy
 
 on:
   push:
@@ -38,9 +38,11 @@ jobs:
           VITE_API_BASE: /api
         run: npm --workspace apps/miniapp run build:h5
 
+  # Kept for a future public server. Enable it with the repository variable
+  # ENABLE_PUBLIC_DEPLOY=true after configuring the SERVER_* values below.
   deploy:
     name: Deploy production
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.ENABLE_PUBLIC_DEPLOY == 'true'
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -142,4 +144,3 @@ jobs:
             -o ServerAliveCountMax=10 \
             "${SERVER_USER}@${SERVER_HOST}" \
             "bash /tmp/deploy-ubuntu.sh /tmp/waimai-picker-${GITHUB_SHA}.tar.gz ${GITHUB_SHA}"
-
