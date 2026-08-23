@@ -13,7 +13,7 @@
       <view>
         <text class="eyebrow">ORDER CAPTURE</text>
         <text class="hero-title">{{ pageTitle }}</text>
-        <text class="hero-copy">用组件库表单录入订单，截图或文字都能补全店铺库。</text>
+        <text class="hero-copy">识别订单图片信息或者手动粘贴。</text>
       </view>
       <view class="hero-badge">
         <text>春日</text>
@@ -24,22 +24,33 @@
     <view class="panel upload-panel">
       <view class="panel-head">
         <view>
-          <text class="panel-title">订单截图</text>
-          <text class="panel-subtitle">可上传截图，也可以直接粘贴订单文字。</text>
+          <text class="panel-title">订单信息</text>
+          <text class="panel-subtitle">最多上传 6 张订单图片，按顺序识别并合并；每张新图消耗 1 次免费 OCR。</text>
         </view>
       </view>
       <u-upload
         :file-list="uploadFiles"
         :auto-upload="false"
-        :max-count="1"
+        :max-count="6"
+        :multiple="true"
         accept="image"
-        upload-text="上传截图"
+        upload-text="上传图片"
         upload-icon-color="#d86693"
         width="148"
         height="148"
         :preview-full-image="true"
         @afterRead="handleAfterRead"
         @delete="removeUpload"
+      />
+      <u-button
+        class="ocr-action-btn"
+        :text="ocrButtonText"
+        shape="circle"
+        :disabled="!uploadFiles.length || recognizing"
+        :loading="recognizing"
+        color="linear-gradient(135deg, #ffbad2 0%, #97ecc1 100%)"
+        custom-style="height: 44px; margin-top: 18rpx; color: #5d3753; font-weight: 800;"
+        @click="recognizeImage"
       />
       <view class="raw-input-card">
         <view class="raw-input-head">
@@ -53,13 +64,13 @@
           placeholder="第一项必须是店铺名；后面可写时间、菜品、金额，例如：兰州牛肉面；2026-07-18 18:45；招牌牛肉面 18"
           border="none"
           height="188"
-          maxlength="800"
+          maxlength="5000"
           count
         />
       </view>
       <view class="text-order-example">
         <text class="example-label">示例</text>
-        <text class="example-copy">店铺名在最前：兰州牛肉面；2026-07-18 18:45 / 下午6:45 / 7月18日 晚上6点45；招牌牛肉面 18；红油小菜 6；冰粉 8</text>
+        <text class="example-copy">兰州牛肉面；招牌牛肉面 18；红油小菜 6；冰粉 8；2026-07-18 18:45 或 下午6:45 或 7月18日 晚上6点45；</text>
       </view>
       <u-button
         text="从文字提取"
@@ -70,17 +81,18 @@
       />
     </view>
 
-    <view class="panel form-panel">
+    <view id="order-info-panel" class="panel form-panel">
+      <view id="order-info-scroll-anchor" class="section-scroll-anchor" />
       <view class="panel-head">
         <view>
           <text class="panel-title">订单信息</text>
-          <text class="panel-subtitle">选择器、评分和金额均使用组件库控件。</text>
+          <!-- <text class="panel-subtitle">选择器、评分和金额均使用组件库控件。</text> -->
         </view>
       </view>
 
       <u-form :model="form" label-position="top" label-width="100%" :label-style="formLabelStyle">
         <u-form-item label="店铺名称">
-          <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="form.storeName" border="none" clearable placeholder="例如：春日便当研究所" />
+          <u-input :color="fieldTextColor" :placeholder-style="fieldPlaceholderStyle" v-model="form.storeName" border="none" clearable placeholder="例如：肯德基（xxx店）" />
         </u-form-item>
 
         <view class="form-grid">
@@ -102,15 +114,15 @@
           </u-form-item>
           <u-form-item label="订单评分">
             <view class="rate-field">
-              <u-rate v-model="form.rating" active-color="#d86693" inactive-color="#dff8eb" :count="5" allow-half />
+              <u-rate v-model="form.rating" active-color="#d86693" inactive-color="#a996a3" :count="5" allow-half />
               <text class="rate-text">{{ formatRating(form.rating) }} 分</text>
             </view>
           </u-form-item>
         </view>
 
-        <u-form-item label="是否不再推荐">
+        <u-form-item label="是否不推荐">
           <view class="switch-field">
-            <text>{{ form.disliked ? "已标记不喜欢" : "仍可进入抽选池" }}</text>
+            <text>{{ form.disliked ? "已标记不喜欢" : "否" }}</text>
             <u-switch v-model="form.disliked" active-color="#ff9fbe" inactive-color="#d5d8d6" />
           </view>
         </u-form-item>
@@ -125,7 +137,7 @@
       <view class="panel-head">
         <view>
           <text class="panel-title">菜品明细</text>
-          <text class="panel-subtitle">菜品会同步到订单记录里。</text>
+          <!-- <text class="panel-subtitle">菜品会同步到订单记录里。</text> -->
         </view>
         <u-button
           text="添加"
@@ -166,10 +178,11 @@
         :key="index"
         :class="['dish-card', { 'dish-card--active': activeDishIndex === index, 'dish-card--collapsed': !isDishExpanded(index) }]"
       >
+        <view :id="'dish-scroll-anchor-' + index" class="section-scroll-anchor" />
         <view class="dish-title" @tap="toggleDish(index)">
           <view class="dish-title-main">
             <text>菜品 {{ index + 1 }}</text>
-            <text class="dish-title-summary">{{ dishSummary(dish, index) }}</text>
+            <text v-if="!isDishExpanded(index)" class="dish-title-summary">{{ dishSummary(dish, index) }}</text>
           </view>
           <view class="dish-title-actions">
             <u-button
@@ -283,7 +296,7 @@
 <script setup lang="ts">
 import { onShow, onTabItemTap } from "@dcloudio/uni-app";
 import { computed, nextTick, reactive, ref } from "vue";
-import { api } from "@/api/client";
+import { api, type OcrExtractionResult } from "@/api/client";
 import type { Order, OrderCreateResult } from "@/types";
 
 type DishForm = {
@@ -301,6 +314,7 @@ type UploadFile = {
   tempFilePath?: string;
   status?: string;
   message?: string;
+  ocrText?: string;
   [key: string]: unknown;
 };
 
@@ -311,6 +325,8 @@ const mealTimeColumns = [mealTimes];
 
 const image = ref("");
 const rawText = ref("");
+const recognizing = ref(false);
+const recognizingProgress = ref(0);
 const fieldTextColor = "#24352d";
 const fieldPlaceholderStyle = "color: #8d7281; -webkit-text-fill-color: #8d7281; opacity: 1;";
 const formLabelStyle = {
@@ -327,9 +343,13 @@ const pickerTitleStyle = {
   opacity: 1
 };
 const uploadFiles = ref<UploadFile[]>([]);
+const ocrButtonText = computed(() => {
+  if (recognizing.value) return "正在识别 " + recognizingProgress.value + "/" + uploadFiles.value.length;
+  return "从图片提取";
+});
 const orderTimeValue = ref(Date.now());
 const picker = reactive({ category: false, mealTime: false, orderTime: false });
-const defaultRating = 4.5;
+const defaultRating = 1;
 const editingOrderId = ref("");
 const deleteDialog = reactive({
   show: false,
@@ -404,22 +424,21 @@ function collapseToActiveDish() {
   scrollToDish(activeDishIndex.value);
 }
 
-function scrollToDish(index: number) {
+function scrollToPageSection(selector: string, duration = 300) {
   void nextTick(() => {
     setTimeout(() => {
-      uni.pageScrollTo({ selector: "#dish-card-" + index, duration: 260 });
-    }, 80);
+      uni.pageScrollTo({ selector, duration });
+    }, 180);
   });
+}
+
+function scrollToDish(index: number) {
+  scrollToPageSection("#dish-scroll-anchor-" + index);
 }
 
 function dishSummary(dish: DishForm, index: number) {
   const name = String(dish.name || "菜品 " + (index + 1)).trim();
-  const price = Number(dish.price || 0);
-  const parts = [name];
-  if (price > 0) parts.push("¥" + formatMoney(price));
-  parts.push(formatRating(dish.rating) + "分");
-  if (dish.disliked) parts.push("不再推荐");
-  return parts.join(" · ");
+  return name + " · " + formatRating(dish.rating) + "分";
 }
 
 function formatMoney(value: number | string | undefined) {
@@ -466,9 +485,9 @@ function fillFormFromOrder(order: Order) {
     disliked: Boolean(dish.disliked),
     note: dish.note || ""
   }));
-  image.value = order.imageUrl || "";
+  image.value = "";
   rawText.value = order.rawText || "";
-  uploadFiles.value = image.value ? [{ url: image.value, status: "success", message: "已选择" }] : [];
+  uploadFiles.value = [];
   syncDishPanels(0);
 }
 
@@ -531,18 +550,35 @@ function resetUploadTab() {
   resetForm();
   closeUploadOverlays();
 }
-function handleAfterRead(event: { file?: UploadFile | UploadFile[] }) {
-  const file = Array.isArray(event.file) ? event.file[0] : event.file;
-  const url = file?.url || file?.thumb || file?.path || file?.tempFilePath || "";
-  if (!url) return;
-  image.value = url;
-  uploadFiles.value = [{ ...file, url, status: "success", message: "已选择" }];
+function uploadFileUrl(file?: UploadFile) {
+  return file?.url || file?.thumb || file?.path || file?.tempFilePath || "";
 }
 
-function removeUpload() {
-  requestDelete("确定删除已选择的订单截图吗？", () => {
-    image.value = "";
-    uploadFiles.value = [];
+function syncPrimaryImage() {
+  image.value = uploadFileUrl(uploadFiles.value[0]);
+}
+
+function handleAfterRead(event: { file?: UploadFile | UploadFile[] }) {
+  const incoming = (Array.isArray(event.file) ? event.file : [event.file]).filter(Boolean) as UploadFile[];
+  const available = Math.max(0, 6 - uploadFiles.value.length);
+  const selected = incoming.slice(0, available)
+    .map((file) => ({ ...file, url: uploadFileUrl(file), status: "success", message: "待识别" }))
+    .filter((file) => file.url);
+  if (!selected.length) return;
+  uploadFiles.value = [...uploadFiles.value, ...selected];
+  syncPrimaryImage();
+}
+
+function removeUpload(event?: { index?: number }) {
+  const index = Math.max(0, Math.min(Number(event?.index || 0), uploadFiles.value.length - 1));
+  requestDelete("确定删除第 " + (index + 1) + " 张订单截图吗？", () => {
+    uploadFiles.value.splice(index, 1);
+    syncPrimaryImage();
+    const recognized = uploadFiles.value.map((file) => file.ocrText || "").filter(Boolean);
+    if (recognized.length) {
+      rawText.value = recognized.join("\n");
+      extract(false);
+    }
   });
 }
 
@@ -553,7 +589,92 @@ function closeUploadOverlays() {
   uni.pageScrollTo({ scrollTop: 0, duration: 0 });
 }
 
-function extract() {
+function ocrErrorCode(error: unknown) {
+  if (!error || typeof error !== "object") return "";
+  const payload = (error as { data?: { error?: string } }).data;
+  return String(payload?.error || "");
+}
+
+function rowsFromOcrResult(result: OcrExtractionResult) {
+  if (!result.lines?.length) return result.rawText;
+  const rows: Array<{ center: number; height: number; lines: OcrExtractionResult["lines"] }> = [];
+  for (const line of [...result.lines].sort((left, right) => left.y - right.y || left.x - right.x)) {
+    const center = line.y + line.height / 2;
+    const current = rows[rows.length - 1];
+    const sameRow = current && Math.abs(current.center - center) <= Math.max(12, Math.min(current.height, line.height) * 0.7);
+    if (sameRow) {
+      current.lines.push(line);
+      current.center = (current.center + center) / 2;
+      current.height = Math.max(current.height, line.height);
+    } else {
+      rows.push({ center, height: line.height, lines: [line] });
+    }
+  }
+  return rows.map((row) => row.lines.sort((left, right) => left.x - right.x).map((line) => line.text.trim()).filter(Boolean).join(" ")).filter(Boolean).join("\n");
+}
+
+function inferOrderCategory(value: string) {
+  if (/奶茶|茶饮|果茶|柠檬茶/.test(value)) return "奶茶";
+  if (/烧烤|烤串|烤肉/.test(value)) return "烧烤";
+  if (/火锅|冒菜|麻辣烫|串串/.test(value)) return "火锅";
+  if (/咖啡|拿铁|美式/.test(value)) return "咖啡";
+  if (/蛋糕|甜品|冰淇淋|糖水/.test(value)) return "甜品";
+  if (/米线|螺蛳粉|面条|拉面|粉面|拌面/.test(value)) return "粉面";
+  if (/沙拉|轻食|低卡/.test(value)) return "轻食";
+  return "快餐";
+}
+
+async function recognizeImage() {
+  if (!uploadFiles.value.length || recognizing.value) return;
+  recognizing.value = true;
+  recognizingProgress.value = 0;
+  let failedCount = 0;
+  try {
+    for (let index = 0; index < uploadFiles.value.length; index += 1) {
+      const selected = uploadFiles.value[index];
+      recognizingProgress.value = index + 1;
+      if (selected.ocrText) continue;
+      try {
+        selected.status = "uploading";
+        selected.message = "识别中";
+        const result = await api.extractOrderImage(uploadFileUrl(selected), selected.file || selected);
+        selected.ocrText = rowsFromOcrResult(result);
+        selected.status = "success";
+        selected.message = "已识别";
+      } catch (error) {
+        selected.status = "failed";
+        selected.message = "识别失败";
+        failedCount += 1;
+        const message = error instanceof Error ? error.message : "OCR 识别失败，请手动录入";
+        const code = ocrErrorCode(error);
+        if (code === "ocr_monthly_limit_reached") {
+          uni.showModal({ title: "免费 OCR 已暂停", content: message, showCancel: false });
+          break;
+        }
+        if (code === "ocr_provider_failed" || code === "ocr_credentials_missing") {
+          uni.showToast({ title: message, icon: "none" });
+          break;
+        }
+      }
+    }
+    const recognized = uploadFiles.value.map((file) => file.ocrText || "").filter(Boolean);
+    if (recognized.length) {
+      rawText.value = recognized.join("\n");
+      extract(false);
+      form.category = inferOrderCategory(form.storeName + "\n" + rawText.value);
+      uni.showToast({ title: failedCount ? "已解析 " + recognized.length + " 张，" + failedCount + " 张失败" : "多图解析完成，请检查结果", icon: "none" });
+    }
+  } finally {
+    recognizing.value = false;
+    recognizingProgress.value = 0;
+  }
+}
+
+function scrollToOrderInfo() {
+  scrollToPageSection("#order-info-scroll-anchor");
+}
+
+function extract(showResultToast = true) {
   const parsed = parseOrderText(rawText.value);
   if (!parsed.storeName && !parsed.dishLines.length && !parsed.orderTime) {
     uni.showToast({ title: "先粘贴订单文字", icon: "none" });
@@ -572,7 +693,10 @@ function extract() {
     syncDishPanels(0);
   }
   form.total = parsed.total ?? form.dishes.reduce((sum, item) => sum + Number(item.price || 0), 0);
-  uni.showToast({ title: parsed.orderTime ? "已提取订单和时间" : "已提取订单文字", icon: "none" });
+  scrollToOrderInfo();
+  if (showResultToast) {
+    uni.showToast({ title: parsed.orderTime ? "已提取订单和时间" : "已提取订单文字", icon: "none" });
+  }
 }
 
 type ParsedOrderText = {
@@ -599,7 +723,9 @@ function parseOrderText(value: string): ParsedOrderText {
     .map((item) => item.trim().replace(/^[-*•]+\s*/, ""))
     .filter(Boolean);
 
-  let storeName = "";
+  const explicitStore = parts.map(extractStoreName).find(Boolean);
+  const likelyStore = parts.find((part) => !isOrderMetaLine(part) && isLikelyStoreName(part));
+  let storeName = explicitStore || likelyStore || "";
   const dishLines: string[] = [];
   for (const part of parts) {
     const store = extractStoreName(part);
@@ -607,7 +733,7 @@ function parseOrderText(value: string): ParsedOrderText {
       storeName = store;
       continue;
     }
-    if (isOrderMetaLine(part)) continue;
+    if (isOrderMetaLine(part) || part === storeName) continue;
     dishLines.push(part);
   }
 
@@ -632,20 +758,33 @@ function parseDishLine(line: string): DishForm {
 }
 
 function extractStoreName(line: string) {
-  const match = line.match(/^(?:店铺|商家|门店|店名)\s*[:：]\s*(.+)$/);
+  const match = line.match(/^(?:(?:店铺|商家|门店|店名)\s*[:：]|商家名称\s*[:：]?)\s*(.+)$/);
   return match?.[1]?.trim() || "";
 }
 
+function isLikelyStoreName(line: string) {
+  if (/[¥￥]\s*\d|\d+(?:\.\d+)?\s*元|\s\d+(?:\.\d+)?\s*$/.test(line) || line.length < 2 || line.length > 36) return false;
+  return /店|餐厅|饭店|食堂|小馆|咖啡|茶|面|粉|烧烤|火锅|汉堡|披萨|便当/.test(line);
+}
+
 function isOrderMetaLine(line: string) {
-  if (/^(?:订单时间|下单时间|下单|时间|送达|取餐|用餐|时段|合计|总计|实付|金额|评分|打分|备注|评价|口味)\s*[:：]/.test(line)) return true;
+  if (/^(?:订单已完成|订单详情|订单信息|商品明细|配送信息|收货信息|再来一单|联系商家|申请售后|感谢使用|查看详情|展开全部)/.test(line)) return true;
+  if (/^(?:订单时间|下单时间|下单|时间|送达|取餐|用餐|时段|合计|总计|实付|应付|金额|支付|配送费|包装费|餐盒费|优惠|红包|折扣|评分|打分|备注|评价|口味|订单号|订单号码|支付方式)\s*[:：]?/.test(line)) return true;
   if (extractStoreName(line)) return true;
   if (extractOrderDateTime(line)) return true;
   return false;
 }
 
 function extractAmount(value: string) {
-  const match = value.match(/(?:实付|合计|总计|总额|金额|支付)\s*[:：]?\s*[¥￥]?\s*(\d+(?:\.\d+)?)/);
-  return match ? Number(match[1]) : undefined;
+  const patterns = [
+    /(?:实付|支付金额|实际支付)\s*[:：]?\s*[¥￥]?\s*(\d+(?:\.\d+)?)/,
+    /(?:应付|合计|总计|总额|金额)\s*[:：]?\s*[¥￥]?\s*(\d+(?:\.\d+)?)/
+  ];
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (match) return Number(match[1]);
+  }
+  return undefined;
 }
 
 function extractRating(value: string) {
@@ -690,7 +829,8 @@ function composeDateTime(year: number, month: number, day: number, hour: number,
 function addDish() {
   const nextIndex = form.dishes.length;
   form.dishes.push(createEmptyDish());
-  expandDish(nextIndex, true);
+  expandDish(nextIndex);
+  scrollToDish(nextIndex);
 }
 
 function removeDish(index: number) {
@@ -784,7 +924,6 @@ function buildPayload() {
     disliked: Boolean(form.disliked),
     note: form.note.trim(),
     rawText: rawText.value.trim(),
-    imageUrl: image.value,
     dishes: dishes.length ? dishes : [{ name: "未命名菜品", price: Number(form.total || 0), rating: normalizeRating(form.rating, defaultRating), disliked: false, note: "" }]
   };
 }
@@ -946,6 +1085,15 @@ onTabItemTap(resetUploadTab);
   gap: 18rpx;
 }
 
+.ocr-action-btn :deep(.u-button__text) {
+  color: #5d3753 !important;
+  font-weight: 800 !important;
+}
+
+:deep(.ocr-action-btn.u-button--disabled) {
+  opacity: 1 !important;
+}
+
 .raw-input-card {
   display: grid;
   gap: 14rpx;
@@ -1104,6 +1252,20 @@ onTabItemTap(resetUploadTab);
 .dishes-panel {
   display: grid;
   gap: 18rpx;
+}
+
+.form-panel,
+.dish-card {
+  position: relative;
+}
+
+.section-scroll-anchor {
+  position: absolute;
+  top: calc(0px - var(--status-bar-height) - var(--app-nav-padding-top) - var(--app-nav-content-height) - var(--app-nav-padding-bottom) - 12px);
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 
 .dish-card {

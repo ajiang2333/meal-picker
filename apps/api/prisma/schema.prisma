@@ -75,7 +75,6 @@ model Order {
   rating      Float
   disliked    Boolean     @default(false)
   note        String?
-  imageUrl    String?
   rawText     String?
   items       OrderItem[]
   reviews     Review[]
@@ -123,6 +122,13 @@ model StoreRevision {
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+}
+
+model OcrMonthlyUsage {
+  month     String   @id
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model RandomPick {

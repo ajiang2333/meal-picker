@@ -255,12 +255,16 @@ function parseUploadResponse(data: unknown) {
 function createUploadError(statusCode: number | undefined, data: unknown, fallback: string) {
   const payload = parseUploadResponse(data) as { error?: string; message?: string; maxSizeMb?: number } | string;
   let message = fallback;
-  if (typeof payload === "object" && payload?.error === "image_too_large") message = "图片太大，请压缩到 " + (payload.maxSizeMb || 12) + "MB 内";
+  if (typeof payload === "object" && payload?.error === "ocr_monthly_limit_reached") message = "本月免费 OCR 次数已用完，为避免产生费用，已暂停识别。下月可继续使用。";
+  else if (typeof payload === "object" && payload?.error === "ocr_credentials_missing") message = "OCR 服务尚未配置，请先手动录入";
+  else if (typeof payload === "object" && payload?.error === "unsupported_ocr_image_type") message = "OCR 仅支持 JPG 和 PNG 截图";
+  else if (typeof payload === "object" && payload?.error === "ocr_no_text") message = "图片中没有识别到文字";
+  else if (typeof payload === "object" && payload?.error === "image_too_large") message = "图片太大，请压缩到 " + (payload.maxSizeMb || 12) + "MB 内";
   else if (typeof payload === "object" && payload?.error === "unsupported_image_type") message = "图片格式不支持";
   else if (typeof payload === "object" && payload?.error === "image_required") message = "没有选到图片";
-  else if (statusCode === 413) message = "图片太大，请压缩后再上传";
-  else if (statusCode && statusCode >= 500) message = "服务器保存图片失败";
   else if (typeof payload === "object" && payload?.message) message = payload.message;
+  else if (statusCode === 413) message = "图片太大，请压缩后再上传";
+  else if (statusCode && statusCode >= 500) message = "服务器处理图片失败";
 
   const error = new Error(message) as Error & { statusCode?: number; data?: unknown };
   error.statusCode = statusCode;
@@ -298,6 +302,45 @@ async function uploadImageWithFetch(filePath: string, file?: unknown) {
   const data = parseUploadResponse(responseText) as { url?: string };
   if (response.ok && data?.url) return data as { url: string };
   throw createUploadError(response.status, data, "上传失败，图片未保存");
+}
+
+export type OcrExtractionResult = {
+  rawText: string;
+  lines: Array<{ text: string; confidence: number; x: number; y: number; width: number; height: number }>;
+  requestId: string;
+};
+
+async function extractOrderImageWithFetch(filePath: string, file?: unknown) {
+  const blob = isBlobLike(file) ? file : await fetch(filePath).then((response) => response.blob());
+  const formData = new FormData();
+  formData.append("image", blob, imageFileNameFromType(blob.type));
+  const response = await fetch(API_BASE + "/ocr/extract", {
+    method: "POST",
+    headers: { "x-user-id": uni.getStorageSync("currentUserId") || "" },
+    body: formData
+  });
+  const data = parseUploadResponse(await response.text()) as OcrExtractionResult;
+  if (response.ok && data?.rawText) return data;
+  throw createUploadError(response.status, data, "OCR 识别失败");
+}
+
+export function extractOrderImage(filePath: string, file?: unknown) {
+  if (canUseFetchUpload(filePath, file)) return extractOrderImageWithFetch(filePath, file);
+  return new Promise<OcrExtractionResult>((resolve, reject) => {
+    uni.uploadFile({
+      url: API_BASE + "/ocr/extract",
+      filePath,
+      name: "image",
+      header: { "x-user-id": uni.getStorageSync("currentUserId") || "" },
+      success: (response) => {
+        const statusCode = response.statusCode || 0;
+        const data = parseUploadResponse(response.data) as OcrExtractionResult;
+        if (statusCode >= 200 && statusCode < 300 && data?.rawText) resolve(data);
+        else reject(createUploadError(statusCode, data, "OCR 识别失败"));
+      },
+      fail: (error) => reject(createUploadError(undefined, error, "无法连接 OCR 服务"))
+    });
+  });
 }
 
 export function uploadImage(filePath: string, file?: unknown) {
@@ -351,7 +394,6 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       disliked?: boolean;
       note?: string;
       rawText?: string;
-      imageUrl?: string;
       dishes?: OrderItemInput[];
     };
     const category = payload.category || existingOrder.category;
@@ -423,7 +465,6 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       disliked: Boolean(payload.disliked),
       note: payload.note || "",
       rawText: payload.rawText ?? existingOrder.rawText,
-      imageUrl: payload.imageUrl ?? existingOrder.imageUrl,
       dishes
     };
     mockOrders[orderIndex] = order;
@@ -520,7 +561,6 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       disliked?: boolean;
       note?: string;
       rawText?: string;
-      imageUrl?: string;
       dishes?: OrderItemInput[];
     };
     const category = payload.category || "快餐";
@@ -588,7 +628,6 @@ function mockRequest<T>(url: string, options: RequestOptions = {}): T | undefine
       disliked: Boolean(payload.disliked),
       note: payload.note || "",
       rawText: payload.rawText || "",
-      imageUrl: payload.imageUrl || "",
       dishes
     };
     mockOrders = [order, ...mockOrders];
@@ -800,7 +839,6 @@ export const api = {
     disliked: boolean;
     note?: string;
     rawText?: string;
-    imageUrl?: string;
     dishes: OrderItemInput[];
   }) => request<OrderCreateResult>("/orders", { method: "POST", data }),
   updateOrder: (id: string, data: unknown) => request(`/orders/${id}`, { method: "PUT", data }),
@@ -813,5 +851,6 @@ export const api = {
     if (result.summary && result.trend && result.categories) return result;
     return mockRequest(`/stats?range=${range}`) || result;
   },
-  uploadImage
+  uploadImage,
+  extractOrderImage
 };

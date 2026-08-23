@@ -14,13 +14,15 @@
     "db:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "test": "node --import tsx --test src/ocr.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.19.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "tencentcloud-sdk-nodejs-ocr": "^4.1.268"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

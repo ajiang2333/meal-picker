@@ -69,14 +69,6 @@
         </view>
       </view>
 
-      <view v-if="order.imageUrl" class="panel card image-panel">
-        <view class="panel-head">
-          <text class="panel-title">订单截图</text>
-          <text class="panel-subtitle">点击可预览原图</text>
-        </view>
-        <image class="order-image" :src="order.imageUrl" mode="aspectFill" @tap="previewImage(order.imageUrl)" />
-      </view>
-
       <view class="panel card">
         <view class="panel-head">
           <text class="panel-title">订单信息</text>
@@ -232,11 +224,6 @@ function formatRating(value: number | string | undefined) {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) return "0.0";
   return parsed.toFixed(1);
-}
-
-function previewImage(url?: string) {
-  if (!url) return;
-  uni.previewImage({ urls: [url], current: url });
 }
 
 function goBack() {
@@ -511,13 +498,6 @@ function editOrder() {
 .edit-copy {
   display: block;
   margin-top: 6rpx;
-}
-
-.order-image {
-  width: 100%;
-  height: 340rpx;
-  border-radius: 24rpx;
-  background: #fff2f8;
 }
 
 .info-list {

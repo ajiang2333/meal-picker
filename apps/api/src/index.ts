@@ -6,13 +6,26 @@ import express from "express";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
 import { loadLocalEnv } from "./env.js";
+import {
+  createTencentOcrClient,
+  exhaustOcrPeriod,
+  isOcrBillingBlockedError,
+  nextOcrResetAt,
+  ocrBillingPeriod,
+  readOcrMonthlyLimit,
+  recognizeOrderImage,
+  reserveOcrAttempt
+} from "./ocr.js";
 
 loadLocalEnv();
 
 const prisma = new PrismaClient();
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
+const ocrUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 7 * 1024 * 1024 } });
 const port = Number(process.env.PORT || 8787);
+const ocrMonthlyCallLimit = readOcrMonthlyLimit();
+const tencentOcrClient = createTencentOcrClient();
 const uploadsDir = resolve(process.cwd(), "uploads");
 const imageMimeExtensions: Record<string, string> = {
   "image/jpeg": ".jpg",
@@ -209,7 +222,6 @@ function toOrderDto(order: any) {
     rating: order.rating,
     disliked: order.disliked,
     note: order.note,
-    imageUrl: order.imageUrl,
     rawText: order.rawText,
     dishes: (order.items || []).map((item: any) => ({
       dishId: item.dishId,
@@ -546,7 +558,6 @@ app.post("/api/orders", async (req, res) => {
       rating: Number(req.body.rating || 4),
       disliked: Boolean(req.body.disliked),
       note: req.body.note,
-      imageUrl: req.body.imageUrl,
       rawText: req.body.rawText
     }
   });
@@ -636,7 +647,6 @@ app.put("/api/orders/:id", async (req, res) => {
       rating,
       disliked: req.body.disliked === undefined ? undefined : Boolean(req.body.disliked),
       note: req.body.note,
-      imageUrl: req.body.imageUrl,
       rawText: req.body.rawText
     }
   });
@@ -911,16 +921,41 @@ app.post("/api/uploads/images", upload.single("image"), async (req, res) => {
   res.status(201).json({ url: publicUploadUrl(req, fileName) });
 });
 
-app.post("/api/ocr/extract", upload.single("image"), async (_req, res) => {
-  res.json({
-    status: "todo",
-    message: "这里预留 OCR 接口，可接微信云托管、阿里云 OCR、百度 OCR 或自建 PaddleOCR。"
-  });
+app.post("/api/ocr/extract", ocrUpload.single("image"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "image_required" });
+  if (!tencentOcrClient) {
+    return res.status(503).json({ error: "ocr_credentials_missing", message: "OCR 服务尚未配置" });
+  }
+  if (!["image/jpeg", "image/png"].includes(req.file.mimetype)) {
+    return res.status(400).json({ error: "unsupported_ocr_image_type", message: "OCR 仅支持 JPG 和 PNG 截图" });
+  }
+
+  const now = new Date();
+  const resetAt = nextOcrResetAt(now);
+  const billingPeriod = ocrBillingPeriod(now);
+  const reserved = await reserveOcrAttempt(prisma, billingPeriod, ocrMonthlyCallLimit);
+  if (!reserved) {
+    return res.status(429).json({ error: "ocr_monthly_limit_reached", resetAt });
+  }
+
+  try {
+    const result = await recognizeOrderImage(tencentOcrClient, req.file.buffer);
+    if (!result.rawText) return res.status(422).json({ error: "ocr_no_text", message: "图片中没有识别到文字" });
+    return res.json(result);
+  } catch (error) {
+    if (isOcrBillingBlockedError(error)) {
+      await exhaustOcrPeriod(prisma, billingPeriod, ocrMonthlyCallLimit);
+      return res.status(429).json({ error: "ocr_monthly_limit_reached", resetAt });
+    }
+    console.error("Tencent OCR failed", error);
+    return res.status(502).json({ error: "ocr_provider_failed", message: "OCR 识别失败，请稍后再试或手动录入" });
+  }
 });
 
-app.use((error: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (error?.code === "LIMIT_FILE_SIZE") {
-    return res.status(413).json({ error: "image_too_large", maxSizeMb: 12 });
+    const maxSizeMb = req.path === "/api/ocr/extract" ? 7 : 12;
+    return res.status(413).json({ error: "image_too_large", maxSizeMb });
   }
   next(error);
 });

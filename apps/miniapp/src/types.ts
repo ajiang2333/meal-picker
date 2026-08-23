@@ -50,7 +50,6 @@ export type Order = {
   rating: number;
   disliked: boolean;
   note?: string;
-  imageUrl?: string;
   rawText?: string;
   dishes: OrderItemInput[];
 };
